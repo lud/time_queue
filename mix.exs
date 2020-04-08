@@ -23,11 +23,12 @@ defmodule TimeQueue.MixProject do
       description: """
       TimeQueue is a simple functional timer queue (no processes, no messaging, no erlang timers). Not optimized for performance yet.
       """,
-      licenses: "MIT"
+      licenses: ["MIT"],
+      links: %{"Github" => "https://github.com/lud/time_queue"}
     ]
   end
 
   defp deps do
-    []
+    [{:ex_doc, ">= 0.0.0", only: :dev, runtime: false}]
   end
 end
