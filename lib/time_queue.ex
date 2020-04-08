@@ -40,9 +40,9 @@ defmodule TimeQueue do
   @opaque t :: [entry]
   @opaque tref :: {integer, integer}
 
-  defguard is_ttl(ttl) when is_integer(elem(ttl, 0)) and elem(ttl, 1) in @ttl_units
+  defguardp is_ttl(ttl) when is_integer(elem(ttl, 0)) and elem(ttl, 1) in @ttl_units
 
-  @spec new :: {:ok, t}
+  @spec new :: t
   def new(),
     do: []
 
@@ -82,6 +82,7 @@ defmodule TimeQueue do
   def enqueue(tq, ttl, val, now) when is_integer(ttl),
     do: enqueue_abs(tq, now + ttl, val)
 
+  @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
   def enqueue_abs(tq, ts, val) do
     tref = {ts, :erlang.unique_integer()}
     entry = trec(tref: tref, val: val)
@@ -107,10 +108,10 @@ defmodule TimeQueue do
 
   @spec ttl_to_milliseconds(ttl) :: number
 
-  def ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
+  defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
     do: n
 
-  def ttl_to_milliseconds({_, _} = ttl) when is_ttl(ttl),
+  defp ttl_to_milliseconds({_, _} = ttl) when is_ttl(ttl),
     do: ttl_to_seconds(ttl) * 1000
 
   defp ttl_to_seconds({seconds, unit}) when unit in [:second, :seconds],
