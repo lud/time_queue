@@ -4,7 +4,7 @@ defmodule TimeQueue.MixProject do
   def project do
     [
       app: :time_queue,
-      version: "0.1.2",
+      version: "0.2.0",
       elixir: "~> 1.10",
       start_permanent: false,
       deps: deps(),

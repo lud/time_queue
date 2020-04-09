@@ -1,14 +1,10 @@
-# Current implementation is siply based on a sorted list. It would
-# benefit from a proper implementation of abstract ptiority queue
+# Implementation based on gb_trees
 defmodule TimeQueue do
   @moduledoc """
   This is the single module of the TimeQueue library.
-
-  Optimization may lead to a different data structure, but at the
-  momement the time queue is implemented as a simple list were entries
-  are sorted with timestamps.
   """
   require Record
+  alias :gb_trees, as: Tree
 
   Record.defrecordp(:trec, tref: nil, val: nil)
 
@@ -42,11 +38,12 @@ defmodule TimeQueue do
 
   @type timespec :: {pos_integer, timespec_unit}
   @type ttl :: timespec | integer
+  @opaque tref :: {pos_integer, integer}
 
-  @opaque entry :: record(:trec, tref: {pos_integer, integer}, val: any)
+  @opaque entry :: record(:trec, tref: tref, val: any)
 
-  @opaque t :: [entry]
-  @opaque tref :: {integer, integer}
+  # @todo add values typing
+  @opaque t :: Tree.tree(tref, any)
 
   defguardp is_timespec(timespec)
             when is_integer(elem(timespec, 0)) and elem(timespec, 1) in @timespec_units
@@ -55,13 +52,12 @@ defmodule TimeQueue do
   Creates an empty time queue.
 
       iex> tq = TimeQueue.new()
-      []
       iex> TimeQueue.peek(tq)
       :empty
   """
   @spec new :: t
   def new,
-    do: []
+    do: Tree.empty()
 
   @doc """
   Returns the next event of the queue with the current system time as `now`.
@@ -94,14 +90,16 @@ defmodule TimeQueue do
   @spec peek(t, now_ms :: pos_integer) ::
           :empty | {:delay, non_neg_integer} | {:ok, entry}
 
-  def peek([], _),
-    do: :empty
-
-  def peek([trec(tref: {ts, _}) = first | _tq], now) when ts <= now,
-    do: {:ok, first}
-
-  def peek([trec(tref: {ts, _}) | _tq], now),
-    do: {:delay, ts - now}
+  def peek(tq, now) do
+    if Tree.is_empty(tq) do
+      :empty
+    else
+      case Tree.smallest(tq) do
+        {{ts, _} = tref, val} when ts <= now -> {:ok, trec(tref: tref, val: val)}
+        {{ts, _}, _} -> {:delay, ts - now}
+      end
+    end
+  end
 
   @doc """
   Extracts the next event of the queue with the current system time as `now`.
@@ -135,9 +133,13 @@ defmodule TimeQueue do
   @spec pop(t, now_ms :: pos_integer) ::
           :empty | {:delay, non_neg_integer} | {:ok, entry()}
   def pop(tq, now) do
-    with {:ok, entry} <- peek(tq, now) do
-      tq = delete(tq, entry)
-      {:ok, entry, tq}
+    if Tree.is_empty(tq) do
+      :empty
+    else
+      case Tree.take_smallest(tq) do
+        {{ts, _} = tref, val, tq2} when ts <= now -> {:ok, trec(tref: tref, val: val), tq2}
+        {{ts, _}, _, _} -> {:delay, ts - now}
+      end
     end
   end
 
@@ -148,8 +150,8 @@ defmodule TimeQueue do
   queue as-is.
   """
   @spec delete(t, entry) :: t
-  def delete(tq, trec() = entry),
-    do: tq -- [entry]
+  def delete(tq, trec(tref: tref)),
+    do: Tree.delete(tref, tq)
 
   @doc """
   Adds a new entry to the queue with a TTL and the current system time as `now`.
@@ -185,8 +187,7 @@ defmodule TimeQueue do
   @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
   def enqueue_abs(tq, ts, val) do
     tref = {ts, :erlang.unique_integer()}
-    entry = trec(tref: tref, val: val)
-    tq = insert(tq, entry)
+    tq = Tree.insert(tref, val, tq)
     {:ok, tref, tq}
   end
 
@@ -201,17 +202,6 @@ defmodule TimeQueue do
   """
   @spec value(entry) :: any
   def value(trec(val: val)), do: val
-
-  defp insert([], entry),
-    do: [entry]
-
-  defp insert([trec(tref: {next, _}) = candidate | tq], trec(tref: {ts, _}) = entry)
-       when next <= ts,
-       do: [candidate | insert(tq, entry)]
-
-  defp insert([trec(tref: {next, _}) = candidate | tq], trec(tref: {ts, _}) = entry)
-       when next > ts,
-       do: [entry, candidate | tq]
 
   defp system_time,
     do: :erlang.system_time(:millisecond)
