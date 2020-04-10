@@ -1,11 +1,11 @@
 defmodule TimeQueueTest do
   use ExUnit.Case
+  alias TimeQueue, as: TQ
   doctest TimeQueue
 
   @iters 100_000
 
   test "Basic API test on gb_trees" do
-    alias TimeQueue, as: TQ
     assert tq = TQ.new()
     assert {:ok, {_, _} = _tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
     assert {:delay, delay} = TQ.peek(tq)
@@ -25,12 +25,11 @@ defmodule TimeQueueTest do
   end
 
   test "Inserting/popping many records with gb_trees implementation" do
-    alias TimeQueue, as: TQ
     IO.puts("TimeQueue gb_trees")
 
     tq = TQ.new()
 
-    {usec, tq} =
+    {usec, _tq} =
       :timer.tc(fn ->
         Enum.reduce(1..@iters, tq, fn i, tq ->
           ts = :rand.uniform(10_000_000_000)
@@ -41,7 +40,7 @@ defmodule TimeQueueTest do
 
     IO.puts("inserted #{@iters} records, took #{usec / 1000}ms")
 
-    {usec, tq} =
+    {usec, _tq} =
       :timer.tc(fn ->
         unfold = fn
           {:ok, _, tq}, f -> f.(TQ.pop(tq), f)
@@ -53,5 +52,29 @@ defmodule TimeQueueTest do
       end)
 
     IO.puts("popped #{@iters} records, took #{usec / 1000}ms")
+  end
+
+  test "Timers are deletable" do
+    tq = TQ.new()
+    assert {:ok, tref, tq} = TQ.enqueue(tq, 0, :hello)
+    assert {:ok, entry} = TQ.peek(tq)
+    assert tref == TQ.tref(entry)
+    # deleting an entry
+    assert {:ok, tq_del_entry} = TQ.delete(tq, entry)
+    assert 0 = TQ.size(tq_del_entry)
+    # deleting an entry by tref
+    assert {:ok, tq_del_tref} = TQ.delete(tq, tref)
+    assert 0 = TQ.size(tq_del_tref)
+
+    # deleting a tref that does not exist
+    assert {:ok, tq_del_bad_tref} = TQ.delete(tq, {0, 0})
+    assert 1 = TQ.size(tq_del_bad_tref)
+
+    # deleting a an entry that was tampered deletes an entry with 
+    # same tref. Of course we tamper the value only.
+    assert {:tqrec, ^tref, :hello} = entry
+    bad_entry = {:tqrec, tref, :hola}
+    assert {:ok, tq_del_tamp_entry} = TQ.delete(tq, bad_entry)
+    assert 0 = TQ.size(tq_del_tamp_entry)
   end
 end

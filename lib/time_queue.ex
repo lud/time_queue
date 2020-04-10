@@ -6,7 +6,7 @@ defmodule TimeQueue do
   require Record
   alias :gb_trees, as: Tree
 
-  Record.defrecordp(:trec, tref: nil, val: nil)
+  Record.defrecordp(:tqrec, tref: nil, val: nil)
 
   @timespec_units [
     # :millisecond, # no single millisecond
@@ -40,7 +40,7 @@ defmodule TimeQueue do
   @type ttl :: timespec | integer
   @opaque tref :: {pos_integer, integer}
 
-  @opaque entry :: record(:trec, tref: tref, val: any)
+  @opaque entry :: record(:tqrec, tref: tref, val: any)
 
   # @todo add values typing
   @opaque t :: Tree.tree(tref, any)
@@ -58,6 +58,15 @@ defmodule TimeQueue do
   @spec new :: t
   def new,
     do: Tree.empty()
+
+  @doc """
+  Returns the numer of entries in the queue.
+
+  See `peek/2`.
+  """
+  @spec size(t) :: integer
+  def size(tq),
+    do: Tree.size(tq)
 
   @doc """
   Returns the next event of the queue with the current system time as `now`.
@@ -95,7 +104,7 @@ defmodule TimeQueue do
       :empty
     else
       case Tree.smallest(tq) do
-        {{ts, _} = tref, val} when ts <= now -> {:ok, trec(tref: tref, val: val)}
+        {{ts, _} = tref, val} when ts <= now -> {:ok, tqrec(tref: tref, val: val)}
         {{ts, _}, _} -> {:delay, ts - now}
       end
     end
@@ -137,7 +146,7 @@ defmodule TimeQueue do
       :empty
     else
       case Tree.take_smallest(tq) do
-        {{ts, _} = tref, val, tq2} when ts <= now -> {:ok, trec(tref: tref, val: val), tq2}
+        {{ts, _} = tref, val, tq2} when ts <= now -> {:ok, tqrec(tref: tref, val: val), tq2}
         {{ts, _}, _, _} -> {:delay, ts - now}
       end
     end
@@ -146,12 +155,20 @@ defmodule TimeQueue do
   @doc """
   Deletes an entry from the queue and returns the new queue.
 
-  The function does not fail if the entry was not found and simply returns the
-  queue as-is.
+  It accepts a time reference or a full entry. In cas of an entry is
+  given, only its time reference will be used to find the entry to 
+  delete, meaning the queue entry will be deleted event if the value
+  of the passed entry was changed.
+
+  The function does not fail if the entry was not found and simply 
+  returns the queue as-is.
   """
-  @spec delete(t, entry) :: t
-  def delete(tq, trec(tref: tref)),
-    do: Tree.delete(tref, tq)
+  @spec delete(t, entry | tref) :: t
+  def delete(tq, tqrec(tref: tref)),
+    do: delete(tq, tref)
+
+  def delete(tq, {_, _} = tref),
+    do: {:ok, Tree.delete_any(tref, tq)}
 
   @doc """
   Adds a new entry to the queue with a TTL and the current system time as `now`.
@@ -201,7 +218,20 @@ defmodule TimeQueue do
       :my_value
   """
   @spec value(entry) :: any
-  def value(trec(val: val)), do: val
+  def value(tqrec(val: val)), do: val
+
+  @doc """
+  Returns the time reference of an queue entry. This reference is
+  used as a key to identify a unique entry.
+      iex> tq = TimeQueue.new()
+      iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value)
+      iex> Process.sleep(10)
+      iex> {:ok, entry} = TimeQueue.peek(tq)
+      iex> tref == TimeQueue.tref(entry)
+      true
+  """
+  @spec tref(entry) :: any
+  def tref(tqrec(tref: tref)), do: tref
 
   defp system_time,
     do: :erlang.system_time(:millisecond)
