@@ -60,21 +60,21 @@ defmodule TimeQueueTest do
     assert {:ok, entry} = TQ.peek(tq)
     assert tref == TQ.tref(entry)
     # deleting an entry
-    assert {:ok, tq_del_entry} = TQ.delete(tq, entry)
+    assert tq_del_entry = TQ.delete(tq, entry)
     assert 0 = TQ.size(tq_del_entry)
     # deleting an entry by tref
-    assert {:ok, tq_del_tref} = TQ.delete(tq, tref)
+    assert tq_del_tref = TQ.delete(tq, tref)
     assert 0 = TQ.size(tq_del_tref)
 
     # deleting a tref that does not exist
-    assert {:ok, tq_del_bad_tref} = TQ.delete(tq, {0, 0})
+    assert tq_del_bad_tref = TQ.delete(tq, {0, 0})
     assert 1 = TQ.size(tq_del_bad_tref)
 
     # deleting a an entry that was tampered deletes an entry with 
     # same tref. Of course we tamper the value only.
     assert {:tqrec, ^tref, :hello} = entry
     bad_entry = {:tqrec, tref, :hola}
-    assert {:ok, tq_del_tamp_entry} = TQ.delete(tq, bad_entry)
+    assert tq_del_tamp_entry = TQ.delete(tq, bad_entry)
     assert 0 = TQ.size(tq_del_tamp_entry)
   end
 end

@@ -4,10 +4,11 @@ defmodule TimeQueue.MixProject do
   def project do
     [
       app: :time_queue,
-      version: "0.2.1",
+      version: "0.2.2",
       elixir: "~> 1.10",
       start_permanent: false,
       deps: deps(),
+      docs: docs(),
       package: package()
     ]
   end
@@ -33,6 +34,12 @@ defmodule TimeQueue.MixProject do
       # Dev tools
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, "~> 1.3", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  defp docs do
+    [
+      main: "TimeQueue"
     ]
   end
 end

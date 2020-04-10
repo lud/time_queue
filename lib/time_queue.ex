@@ -2,6 +2,15 @@
 defmodule TimeQueue do
   @moduledoc """
   This is the single module of the TimeQueue library.
+
+  The queue is implemented with [gb_trees](http://erlang.org/doc/man/gb_trees.html).
+
+  The tree keys are a two-tuple composed of the timestamp of an entry
+  and an unique integer.
+
+  We do not use strictly monotonically increasing integers but simple
+  unique integers for performance reasons. That means that the order
+  between two entries of the queue with the same timestamp is unknown.
   """
   require Record
   alias :gb_trees, as: Tree
@@ -155,12 +164,12 @@ defmodule TimeQueue do
   @doc """
   Deletes an entry from the queue and returns the new queue.
 
-  It accepts a time reference or a full entry. In cas of an entry is
-  given, only its time reference will be used to find the entry to 
-  delete, meaning the queue entry will be deleted event if the value
-  of the passed entry was changed.
+  It accepts a time reference or a full entry. When an entry is given,
+  its time reference will be used to find the entry to  delete,
+  meaning the queue entry will be deleted even if the value of the
+  passed entry was tampered.
 
-  The function does not fail if the entry was not found and simply 
+  The function does not fail if the entry cannot be found and simply
   returns the queue as-is.
   """
   @spec delete(t, entry | tref) :: t
@@ -168,7 +177,7 @@ defmodule TimeQueue do
     do: delete(tq, tref)
 
   def delete(tq, {_, _} = tref),
-    do: {:ok, Tree.delete_any(tref, tq)}
+    do: Tree.delete_any(tref, tq)
 
   @doc """
   Adds a new entry to the queue with a TTL and the current system time as `now`.
