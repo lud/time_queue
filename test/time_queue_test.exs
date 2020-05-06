@@ -24,12 +24,10 @@ defmodule TimeQueueTest do
     assert :empty = TQ.pop(tq)
   end
 
-  test "Inserting/popping many records with gb_trees implementation" do
-    IO.puts("TimeQueue gb_trees")
-
+  defp insert_pop_many() do
     tq = TQ.new()
 
-    {usec, _tq} =
+    {insert_usec, tq} =
       :timer.tc(fn ->
         Enum.reduce(1..@iters, tq, fn i, tq ->
           ts = :rand.uniform(10_000_000_000)
@@ -38,20 +36,47 @@ defmodule TimeQueueTest do
         end)
       end)
 
-    IO.puts("inserted #{@iters} records, took #{usec / 1000}ms")
+    assert @iters === TQ.size(tq)
 
-    {usec, _tq} =
+    {pop_usec, final_val} =
       :timer.tc(fn ->
         unfold = fn
           {:ok, _, tq}, f -> f.(TQ.pop(tq), f)
-          :empty, _f -> :ok
+          :empty, _f -> :ends_with_empty
           {:start, tq}, f -> f.(TQ.pop(tq), f)
         end
 
         unfold.({:start, tq}, unfold)
       end)
 
-    IO.puts("popped #{@iters} records, took #{usec / 1000}ms")
+    assert :ends_with_empty === final_val
+
+    IO.puts("insert/pop #{@iters} records (ms): #{fmt_usec(insert_usec)} #{fmt_usec(pop_usec)}")
+  end
+
+  test "Inserting/popping many records with gb_trees implementation" do
+    insert_pop_many()
+  end
+
+  # Some bad test to check that performance is not degrading
+  # test "Inserting/popping many records in multiple queues concurrently" do
+  #   concur = 4 * System.schedulers_online()
+
+  #   for _ <- 1..concur do
+  #     &insert_pop_many/0
+  #   end
+  #   |> Enum.map(&Task.async/1)
+  #   |> Enum.map(&Task.await(&1, :infinity))
+
+  #   # |> Task.async_stream(fn f -> f.() end)
+  #   # |> Stream.run()
+  # end
+
+  defp fmt_usec(usec) do
+    usec
+    |> div(1000)
+    |> Integer.to_string()
+    |> String.pad_leading(6, " ")
   end
 
   test "Timers are deletable" do
@@ -70,7 +95,7 @@ defmodule TimeQueueTest do
     assert tq_del_bad_tref = TQ.delete(tq, {0, 0})
     assert 1 = TQ.size(tq_del_bad_tref)
 
-    # deleting a an entry that was tampered deletes an entry with 
+    # deleting a an entry that was tampered deletes an entry with
     # same tref. Of course we tamper the value only.
     assert {:tqrec, ^tref, :hello} = entry
     bad_entry = {:tqrec, tref, :hola}

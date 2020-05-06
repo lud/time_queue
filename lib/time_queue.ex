@@ -1,16 +1,19 @@
 # Implementation based on gb_trees
 defmodule TimeQueue do
   @moduledoc """
-  This is the single module of the TimeQueue library.
+  Implements a timers queue based on [gb_trees](http://erlang.org/doc/man/gb_trees.html).
 
-  The queue is implemented with [gb_trees](http://erlang.org/doc/man/gb_trees.html).
-
-  The tree keys are a two-tuple composed of the timestamp of an entry
+  The queue keys are a two-tuple composed of the timestamp of an entry
   and an unique integer.
 
-  We do not use strictly monotonically increasing integers but simple
-  unique integers for performance reasons. That means that the order
-  between two entries of the queue with the same timestamp is unknown.
+  No erlang timers or processes are used, as the queue is only a
+  data structure. The advantage is that the queue can be persisted on
+  storage and keep working after restarting the runtime. The queue
+  maintain its own list of unique integers to avoir relying on BEAM
+  unique integers as they are reset on restart.
+
+  The main drawback is that the queue entries must be manually checked
+  for expired timers.
   """
   require Record
   alias :gb_trees, as: Tree
@@ -45,14 +48,26 @@ defmodule TimeQueue do
           | :week
           | :weeks
 
+  @opaque t :: {id, Tree.tree(tref, any)}
   @type timespec :: {pos_integer, timespec_unit}
   @type ttl :: timespec | integer
-  @opaque tref :: {pos_integer, integer}
-
+  @type timestamp_ms :: pos_integer
+  @opaque tref :: {timestamp_ms, integer}
+  @opaque id :: integer
   @opaque entry :: record(:tqrec, tref: tref, val: any)
-
   # @todo add values typing
-  @opaque t :: Tree.tree(tref, any)
+  @type pop_return(tq) :: :empty | {:delay, non_neg_integer} | {:ok, entry(), tq}
+  @type enqueue_return(tq) :: {:ok, tref, tq}
+
+  # If we reach the @max_int for the keys, we will start over at @min_int.
+  # Hopefully in the meantime they will be no tref stored that would match any
+  # tref created with the same timestamp and the same ref (very unlikely !).
+  # We have to do this though because the time queue must be persistable, so
+  # unique integers must remain unique even if we are restarting the runtime ;
+  # and timestamps can be manually set to any values, for example with small
+  # integers like (1, 2, 3) when modeling a discrete time (in steps).
+  @min_int -576_460_752_303_423_489
+  @max_int 576_460_752_303_423_488
 
   defguardp is_timespec(timespec)
             when is_integer(elem(timespec, 0)) and elem(timespec, 1) in @timespec_units
@@ -66,16 +81,14 @@ defmodule TimeQueue do
   """
   @spec new :: t
   def new,
-    do: Tree.empty()
+    do: {@min_int, Tree.empty()}
 
   @doc """
   Returns the numer of entries in the queue.
-
-  See `peek/2`.
   """
   @spec size(t) :: integer
-  def size(tq),
-    do: Tree.size(tq)
+  def size({_, tree}),
+    do: Tree.size(tree)
 
   @doc """
   Returns the next event of the queue with the current system time as `now`.
@@ -84,7 +97,7 @@ defmodule TimeQueue do
   """
   @spec peek(t) :: :empty | {:delay, non_neg_integer} | {:ok, entry}
   def peek(tq),
-    do: peek(tq, system_time())
+    do: peek(tq, now())
 
   @doc """
   Returns the next event of the queue according to the given current time in
@@ -105,14 +118,12 @@ defmodule TimeQueue do
       {:delay, 80}
       iex> {:ok, _} = TimeQueue.peek(tq, _now = 100)
   """
-  @spec peek(t, now_ms :: pos_integer) ::
-          :empty | {:delay, non_neg_integer} | {:ok, entry}
-
-  def peek(tq, now) do
-    if Tree.is_empty(tq) do
+  @spec peek(t, now_ms :: timestamp_ms) :: :empty | {:delay, non_neg_integer} | {:ok, entry}
+  def peek({_, tree}, now) do
+    if Tree.is_empty(tree) do
       :empty
     else
-      case Tree.smallest(tq) do
+      case Tree.smallest(tree) do
         {{ts, _} = tref, val} when ts <= now -> {:ok, tqrec(tref: tref, val: val)}
         {{ts, _}, _} -> {:delay, ts - now}
       end
@@ -124,10 +135,9 @@ defmodule TimeQueue do
 
   See `pop/2`.
   """
-  @spec pop(t) ::
-          :empty | {:delay, non_neg_integer} | {:ok, TimeQueue.entry()}
+  @spec pop(t) :: pop_return(t)
   def pop(tq),
-    do: pop(tq, system_time())
+    do: pop(tq, now())
 
   @doc """
   Extracts the next event of the queue according to the given current time in
@@ -148,15 +158,18 @@ defmodule TimeQueue do
       {:delay, 80}
       iex> {:ok, _, _} = TimeQueue.pop(tq, _now = 100)
   """
-  @spec pop(t, now_ms :: pos_integer) ::
-          :empty | {:delay, non_neg_integer} | {:ok, entry()}
-  def pop(tq, now) do
-    if Tree.is_empty(tq) do
+  @spec pop(t, now_ms :: timestamp_ms) :: pop_return(t)
+  def pop({max_id, tree}, now) do
+    if Tree.is_empty(tree) do
       :empty
     else
-      case Tree.take_smallest(tq) do
-        {{ts, _} = tref, val, tq2} when ts <= now -> {:ok, tqrec(tref: tref, val: val), tq2}
-        {{ts, _}, _, _} -> {:delay, ts - now}
+      case Tree.smallest(tree) do
+        {{ts, _}, _} when ts <= now ->
+          {tref, val, tree2} = Tree.take_smallest(tree)
+          {:ok, tqrec(tref: tref, val: val), {max_id, tree2}}
+
+        {{ts, _}, _} ->
+          {:delay, ts - now}
       end
     end
   end
@@ -176,26 +189,25 @@ defmodule TimeQueue do
   def delete(tq, tqrec(tref: tref)),
     do: delete(tq, tref)
 
-  def delete(tq, {_, _} = tref),
-    do: Tree.delete_any(tref, tq)
+  def delete({max_id, tree}, {_, _} = tref),
+    do: {max_id, Tree.delete_any(tref, tree)}
 
   @doc """
   Adds a new entry to the queue with a TTL and the current system time as `now`.
 
   See `enqueue/4`.
   """
-  @spec enqueue(t, ttl, any) :: {:ok, tref, t}
+  @spec enqueue(t, ttl, any) :: enqueue_return(t)
   def enqueue(tq, ttl, val),
-    do: enqueue(tq, ttl, val, system_time())
+    do: enqueue(tq, ttl, val, now())
 
   @doc """
   Adds a new entry to the queue with a TTL relative to the given timestamp in
   milliseconds.
 
-  Returns `{:ok, tref, new_queue}` where `tref` is a timer reference (not
-  used yed).
+  Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue(t, ttl, any, now :: integer) :: {:ok, tref, t}
+  @spec enqueue(t, ttl, any, now :: integer) :: enqueue_return(t)
   def enqueue(tq, ttl, val, now_ms)
 
   def enqueue(tq, ttl, val, now) when is_timespec(ttl),
@@ -207,15 +219,18 @@ defmodule TimeQueue do
   @doc """
   Adds a new entry to the queue with an absolute timestamp.
 
-  Returns `{:ok, tref, new_queue}` where `tref` is a timer reference (not
-  used yed).
+  Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
-  def enqueue_abs(tq, ts, val) do
-    tref = {ts, :erlang.unique_integer()}
-    tq = Tree.insert(tref, val, tq)
-    {:ok, tref, tq}
+  @spec enqueue_abs(t, end_time :: integer, value :: any) :: enqueue_return(t)
+  def enqueue_abs({max_id, tree}, ts, val) do
+    new_max_id = bump_max_id(max_id)
+    tref = {ts, new_max_id}
+    tree = Tree.insert(tref, val, tree)
+    {:ok, tref, {new_max_id, tree}}
   end
+
+  defp bump_max_id(max_id) when max_id < @max_int, do: max_id + 1
+  defp bump_max_id(@max_int), do: @min_int
 
   @doc """
   Returns the value of an queue entry.
@@ -242,7 +257,7 @@ defmodule TimeQueue do
   @spec tref(entry) :: any
   def tref(tqrec(tref: tref)), do: tref
 
-  defp system_time,
+  defp now,
     do: :erlang.system_time(:millisecond)
 
   defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
