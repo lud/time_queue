@@ -91,7 +91,7 @@ defmodule TimeQueue do
     do: Tree.size(tree)
 
   @doc """
-  Returns the next event of the queue with the current system time as `now`.
+  Returns the next event of the queue with the current system time as `now/0`.
 
   See `peek/2`.
   """
@@ -131,7 +131,7 @@ defmodule TimeQueue do
   end
 
   @doc """
-  Extracts the next event of the queue with the current system time as `now`.
+  Extracts the next event of the queue with the current system time as `now/0`.
 
   See `pop/2`.
   """
@@ -193,7 +193,7 @@ defmodule TimeQueue do
     do: {max_id, Tree.delete_any(tref, tree)}
 
   @doc """
-  Adds a new entry to the queue with a TTL and the current system time as `now`.
+  Adds a new entry to the queue with a TTL and the current system time as `now/0`.
 
   See `enqueue/4`.
   """
@@ -257,7 +257,16 @@ defmodule TimeQueue do
   @spec tref(entry) :: any
   def tref(tqrec(tref: tref)), do: tref
 
-  defp now,
+  @doc """
+  This function is used internally to determine the current time when it is
+  not given in the arguments to `enqueue/3`, `pop/1` and `peek/1`.
+
+  It is a simple alias to `:erlang.system_time(:millisecond)`. TimeQueue does
+  not use monotonic time since it already manages its own unique identifiers for
+  queue entries.
+  """
+  @spec now :: integer
+  def now(),
     do: :erlang.system_time(:millisecond)
 
   defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
