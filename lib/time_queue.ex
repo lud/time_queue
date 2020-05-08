@@ -56,7 +56,8 @@ defmodule TimeQueue do
   @opaque id :: integer
   @opaque entry :: record(:tqrec, tref: tref, val: any)
   # @todo add values typing
-  @type pop_return(tq) :: :empty | {:delay, non_neg_integer} | {:ok, entry(), tq}
+  @type pop_return(tq) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry(), tq}
+  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry()}
   @type enqueue_return(tq) :: {:ok, tref, tq}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
@@ -95,7 +96,7 @@ defmodule TimeQueue do
 
   See `peek/2`.
   """
-  @spec peek(t) :: :empty | {:delay, non_neg_integer} | {:ok, entry}
+  @spec peek(t) :: peek_return()
   def peek(tq),
     do: peek(tq, now())
 
@@ -113,19 +114,18 @@ defmodule TimeQueue do
 
   ### Example
 
-      iex> {:ok, _tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> TimeQueue.peek(tq, _now = 20)
-      {:delay, 80}
+      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.peek(tq, _now = 20)
       iex> {:ok, _} = TimeQueue.peek(tq, _now = 100)
   """
-  @spec peek(t, now_ms :: timestamp_ms) :: :empty | {:delay, non_neg_integer} | {:ok, entry}
+  @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
   def peek({_, tree}, now) do
     if Tree.is_empty(tree) do
       :empty
     else
       case Tree.smallest(tree) do
         {{ts, _} = tref, val} when ts <= now -> {:ok, tqrec(tref: tref, val: val)}
-        {{ts, _}, _} -> {:delay, ts - now}
+        {{ts, _} = tref, _} -> {:delay, tref, ts - now}
       end
     end
   end
@@ -148,14 +148,13 @@ defmodule TimeQueue do
   - `:empty`
   - `{:ok, entry, new_queue}` if the timestamp of the first entry is `<=` to the
     given current time. The entry is deleted from `new_queue`.
-  - `{:delay, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
 
-      iex> {:ok, _tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> TimeQueue.pop(tq, _now = 20)
-      {:delay, 80}
+      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.pop(tq, _now = 20)
       iex> {:ok, _, _} = TimeQueue.pop(tq, _now = 100)
   """
   @spec pop(t, now_ms :: timestamp_ms) :: pop_return(t)
@@ -168,8 +167,8 @@ defmodule TimeQueue do
           {tref, val, tree2} = Tree.take_smallest(tree)
           {:ok, tqrec(tref: tref, val: val), {max_id, tree2}}
 
-        {{ts, _}, _} ->
-          {:delay, ts - now}
+        {{ts, _} = tref, _} ->
+          {:delay, tref, ts - now}
       end
     end
   end

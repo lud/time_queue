@@ -7,9 +7,9 @@ defmodule TimeQueueTest do
 
   test "Basic API test on gb_trees" do
     assert tq = TQ.new()
-    assert {:ok, {_, _} = _tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
-    assert {:delay, delay} = TQ.peek(tq)
-    assert {:delay, _delay} = TQ.pop(tq)
+    assert {:ok, {_, _} = tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
+    assert {:delay, ^tref, _delay} = TQ.peek(tq)
+    assert {:delay, ^tref, delay} = TQ.pop(tq)
 
     Process.sleep(delay)
 
