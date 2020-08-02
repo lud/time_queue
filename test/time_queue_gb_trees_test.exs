@@ -1,11 +1,11 @@
-defmodule TimeQueueTest do
+defmodule TimeQueue.GbTreesTest do
   use ExUnit.Case
-  alias TimeQueue, as: TQ
-  doctest TimeQueue
+  alias TimeQueue.GbTrees, as: TQ
+  doctest TimeQueue.GbTrees
 
-  test "Basic API test on a list of maps" do
+  test "Basic API test on gb_trees" do
     assert tq = TQ.new()
-    assert {:ok, %{t: _, u: _} = tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
+    assert {:ok, {_, _} = tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
     assert {:delay, ^tref, _delay} = TQ.peek(tq)
     assert {:delay, ^tref, delay} = TQ.pop(tq)
 
@@ -50,13 +50,13 @@ defmodule TimeQueueTest do
     assert :ends_with_empty === final_val
 
     IO.puts(
-      "\n[maps] insert/pop #{pad_num(iters)} records (ms): #{fmt_usec(insert_usec)} #{
+      "\n[tree] insert/pop #{pad_num(iters)} records (ms): #{fmt_usec(insert_usec)} #{
         fmt_usec(pop_usec)
       }"
     )
   end
 
-  test "Inserting/popping many records with maps implementation" do
+  test "Inserting/popping many records with gb_trees implementation" do
     insert_pop_many(10)
     insert_pop_many(100)
     insert_pop_many(1000)
@@ -76,6 +76,7 @@ defmodule TimeQueueTest do
   #   # |> Task.async_stream(fn f -> f.() end)
   #   # |> Stream.run()
   # end
+
   defp fmt_usec(usec) do
     usec
     |> div(1000)
@@ -101,24 +102,14 @@ defmodule TimeQueueTest do
     assert 0 = TQ.size(tq_del_tref)
 
     # deleting a tref that does not exist
-    assert tq_del_bad_tref = TQ.delete(tq, %{t: 0, u: 0})
+    assert tq_del_bad_tref = TQ.delete(tq, {0, 0})
     assert 1 = TQ.size(tq_del_bad_tref)
 
     # deleting a an entry that was tampered deletes an entry with
     # same tref. Of course we tamper the value only.
-    assert %{k: ^tref, v: :hello} = entry
-    bad_entry = %{k: tref, v: :hola}
+    assert {:tqrec, ^tref, :hello} = entry
+    bad_entry = {:tqrec, tref, :hola}
     assert tq_del_tamp_entry = TQ.delete(tq, bad_entry)
     assert 0 = TQ.size(tq_del_tamp_entry)
-  end
-
-  test "json encode a queue" do
-    assert tq = TQ.new()
-    assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 1)
-    assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 2)
-    assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 3)
-    assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 4)
-
-    assert {:ok, json} = Jason.encode(tq, pretty: true)
   end
 end

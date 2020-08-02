@@ -1,13 +1,26 @@
 # TimeQueue
 
-**TODO: Add description**
+This library implements a pure functional queue of timers that is persistable as
+a simple erlang term. No processes or Erlang timers are used.
+
+## Use case
+
+- When you need to attach timers to a persistent data structure (ecto schemas,
+persistent GenServers, …), for example in a board game.
+- When you need to publish timers over an API (JSON, XML, …).
+
+## Changelog
+
+- `0.6.0` – **Breaking change**, the map implementation is now the default. The
+  previous implementation based on `gb_trees` is available in the
+  `TimeQueue.GbTrees` module.
 
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:time_queue, "~> 0.1.0"}
+    {:time_queue, "~> 0.6.0"}
   ]
 end
 ```
@@ -17,8 +30,8 @@ end
 ```elixir
 tq = TimeQueue.new()
 {:ok, tref, tq} = TimeQueue.enqueue(tq, {500, :ms}, :myval)
-{:delay, delay} = TimeQueue.peek(tq)
-{:delay, _delay} = TimeQueue.pop(tq)
+{:delay, ^tref, _delay} = TimeQueue.peek(tq)
+{:delay, ^tref, _delay} = TimeQueue.pop(tq)
 
 Process.sleep(delay)
 
