@@ -190,18 +190,38 @@ defmodule TimeQueue do
   def delete(tq, %{k: tref}),
     do: delete(tq, tref)
 
-  def delete(%{s: size, q: q} = tq, %{t: _, u: _} = tref) do
-    case delete_entry(q, tref) do
-      {:deleted, rest} -> %{tq | s: size - 1, q: rest}
-      :not_found -> tq
-    end
+  def delete(tq, %{t: _, u: _} = tref),
+    do: filter(tq, fn %{k: k} -> k != tref end)
+
+  @doc """
+  Deletes all entries from the queue whose values are equal to `unwanted`.
+  """
+  @spec delete_val(t, any) :: t
+  def delete_val(tq, unwanted) do
+    filter(tq, fn %{v: v} -> v !== unwanted end)
   end
 
-  defp delete_entry(q, tref) do
-    case Enum.split_with(q, fn %{k: k} -> k == tref end) do
-      {[%{k: ^tref}], rest} -> {:deleted, rest}
-      {[], _} -> :not_found
-    end
+  @doc """
+  Returns a new queue with entries for whom the given callback returned a truthy
+  value.
+
+  Use `filter_val/2` to filter only using values.
+  """
+  @spec filter(t, (entry -> bool)) :: t
+  def filter(%{q: q} = tq, fun) do
+    new_q = Enum.filter(q, fun)
+    %{tq | s: length(new_q), q: new_q}
+  end
+
+  @doc """
+  Returns a new queue with entries for whom the given callback returned a truthy
+  value.
+
+  Unlinke `filter/2`, the callback is only passed the entry value.
+  """
+  @spec filter_val(t, (any -> bool)) :: t
+  def filter_val(tq, fun) do
+    filter(tq, fn %{v: v} -> fun.(v) end)
   end
 
   @doc """
@@ -316,4 +336,8 @@ defmodule TimeQueue do
 
   defp timespec_add(ttl, int),
     do: ttl_to_milliseconds(ttl) + int
+
+  def supports_encoding(:json), do: true
+  def supports_encoding(:etf), do: true
+  def supports_encoding(_), do: false
 end

@@ -7,6 +7,7 @@ defmodule TimeQueue.MixProject do
       version: "0.6.0",
       elixir: "~> 1.10",
       start_permanent: false,
+      elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
       package: package()
@@ -44,4 +45,7 @@ defmodule TimeQueue.MixProject do
       main: "TimeQueue"
     ]
   end
+
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 end

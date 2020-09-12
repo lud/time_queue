@@ -194,6 +194,48 @@ defmodule TimeQueue.GbTrees do
     do: {max_id, Tree.delete_any(tref, tree)}
 
   @doc """
+  Deletes all entries from the queue whose values are equal to `unwanted`.
+
+  This function is slow with `gb_trees`, see `filter/2`.
+  """
+  @spec delete_val(t, any) :: t
+  def delete_val(tq, unwanted) do
+    filter(tq, fn %{v: v} -> v !== unwanted end)
+  end
+
+  @doc """
+  Returns a new queue with entries for whom the given callback returned a truthy
+  value.
+
+  With the gb_trees implementation, this operation is _very_ expensive as we
+  convert the tree to and ordered list, filter the list, and convert back to a
+  tree.
+  """
+  @spec filter(t, (entry -> bool)) :: t
+  def filter({max_id, tree} = tq, fun) do
+    tree =
+      tree
+      |> Tree.to_list()
+      |> Enum.filter(fun)
+      |> Tree.from_orddict()
+
+    {max_id, tree}
+  end
+
+  @doc """
+  Returns a new queue with entries for whom the given callback returned a truthy
+  value.
+
+  Unlinke `filter/2`, the callback is only passed the entry value.
+
+  This function is slow with `gb_trees`, see `filter/2`.
+  """
+  @spec filter_val(t, (any -> bool)) :: t
+  def filter_val(tq, fun) do
+    filter(tq, fn {_, v} -> fun.(v) end)
+  end
+
+  @doc """
   Adds a new entry to the queue with a TTL and the current system time as `now/0`.
 
   See `enqueue/4`.
@@ -296,4 +338,7 @@ defmodule TimeQueue.GbTrees do
 
   defp timespec_add(ttl, int),
     do: ttl_to_milliseconds(ttl) + int
+
+  def supports_encoding(:etf), do: true
+  def supports_encoding(_), do: false
 end
