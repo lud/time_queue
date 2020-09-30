@@ -212,7 +212,7 @@ defmodule TimeQueue.GbTrees do
   tree.
   """
   @spec filter(t, (entry -> bool)) :: t
-  def filter({max_id, tree} = tq, fun) do
+  def filter({max_id, tree}, fun) do
     tree =
       tree
       |> Tree.to_list()
