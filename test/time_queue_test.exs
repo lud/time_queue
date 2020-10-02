@@ -1,3 +1,3 @@
 defmodule TimeQueueTest do
-  use TimeQueueCase, async: false, impl: TimeQueue
+  use TimeQueueCase, impl: TimeQueue
 end

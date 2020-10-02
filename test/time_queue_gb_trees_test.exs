@@ -1,3 +1,3 @@
 defmodule TimeQueue.GbTreesTest do
-  use TimeQueueCase, async: false, impl: TimeQueue.GbTrees
+  use TimeQueueCase, impl: TimeQueue.GbTrees
 end

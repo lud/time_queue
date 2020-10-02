@@ -15,6 +15,12 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ### Fixes
 
 ### Breaks
+
+
+## 0.8.0 - (2020-10-02)
+---
+
+### Breaks
 * the `peek` and `pop` functions will now only return the value instead of the full entry for the `{:ok, …}` return types. The functions `peek_entry` and `pop_entry` are available to get the full entry.
 
 

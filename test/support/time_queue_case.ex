@@ -1,10 +1,11 @@
 defmodule TimeQueueCase do
   use ExUnit.CaseTemplate
 
-  using opts do
+  defmacro __using__(opts) do
     impl = Keyword.fetch!(opts, :impl)
 
     quote location: :keep do
+      use ExUnit.Case, async: false
       alias unquote(impl), as: TQ
       doctest unquote(impl)
 
@@ -17,7 +18,8 @@ defmodule TimeQueueCase do
         Process.sleep(delay)
 
         # PEEK
-        assert {:ok, entry} = TQ.peek(tq)
+        assert {:ok, :myval} = TQ.peek(tq)
+        assert {:ok, entry} = TQ.peek_entry(tq)
         assert :myval = TQ.value(entry)
 
         # POP
@@ -95,7 +97,7 @@ defmodule TimeQueueCase do
       test "Timers are deletable by ref" do
         tq = TQ.new()
         assert {:ok, tref, tq} = TQ.enqueue(tq, 0, :hello)
-        assert {:ok, entry} = TQ.peek(tq)
+        assert {:ok, entry} = TQ.peek_entry(tq)
         assert tref == TQ.tref(entry)
         # deleting an entry
         tq_del_entry = TQ.delete(tq, entry)
@@ -157,34 +159,23 @@ defmodule TimeQueueCase do
 
       test "peek/pop entries or values" do
         tq = TQ.new()
-
-        # assert {:ok, tref, tq} =
-        #          TQ.enqueue(tq, {500, :ms}, :myval)
-        #          |> IO.inspect(label: "enqueue")
+        assert {:ok, tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
 
         # # In case of a delay the behaviour was not changed in v0.8
-        # assert {:delay, ^tref, _delay} =
-        #          TQ.peek(tq)
-        #          |> IO.inspect(label: "peek")
+        assert {:delay, ^tref, _delay} = TQ.peek(tq)
+        assert {:delay, ^tref, delay} = TQ.pop(tq)
 
-        # assert {:delay, ^tref, delay} =
-        #          TQ.pop(tq)
-        #          |> IO.inspect(label: "pop")
+        Process.sleep(500)
 
         # # But with a succesful return we only get the value
-        # # assert {:ok, :myval} = TQ.peek(tq)
-        # assert {:ok, :myval, _} =
-        #          TQ.pop(tq)
-        #          |> IO.inspect(label: "pop")
+        assert {:ok, :myval} = TQ.peek(tq)
+        assert {:ok, :myval, _} = TQ.pop(tq)
 
         # # The old behaviour is available
-        # # assert {:ok, entry_peeked} = TQ.peek_entry(tq)
-        # # assert :myval = TQ.value(entry)
-        # assert {:ok, entry_poped, _} =
-        #          TQ.pop_entry(tq)
-        #          |> IO.inspect(label: "entry pop")
-
-        # assert :myval = TQ.value(entry_poped)
+        assert {:ok, entry_peeked} = TQ.peek_entry(tq)
+        assert {:ok, entry_poped, _} = TQ.pop_entry(tq)
+        assert :myval = TQ.value(entry_peeked)
+        assert :myval = TQ.value(entry_poped)
       end
     end
   end

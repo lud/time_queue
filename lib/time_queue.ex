@@ -58,10 +58,10 @@ defmodule TimeQueue do
   @type ttl :: timespec | integer
   @type timestamp_ms :: pos_integer
   @opaque tref :: %{t: timestamp_ms, u: integer}
-  # @todo add values typing
-  @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry(), t}
   @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value, t}
-  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry()}
+  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value}
+  @type peek_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry}
+  @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry, t}
   @type enqueue_return(tq) :: {:ok, tref, tq}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
@@ -83,7 +83,7 @@ defmodule TimeQueue do
   Creates an empty time queue.
 
       iex> tq = TimeQueue.new()
-      iex> TimeQueue.peek(tq)
+      iex> TimeQueue.peek_entry(tq)
       :empty
   """
   @spec new :: t
@@ -98,13 +98,37 @@ defmodule TimeQueue do
     do: s
 
   @doc """
-  Returns the next event of the queue with the current system time as `now/0`.
+  Returns the next value of the queue with the current system time as `now/0`.
 
   See `peek/2`.
   """
   @spec peek(t) :: peek_return()
   def peek(tq),
     do: peek(tq, now())
+
+  @doc """
+  Returns the next value of the queue according to the given current time in
+  milliseconds.
+
+  Just like `pop/2` _vs._ `pop_entry/2`, `peek` wil only return `{:ok, value}`
+  when a timeout is reached whereas `peek_entry` will return `{:ok, entry}`.
+  """
+  @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
+  def peek(tq, now) do
+    case peek_entry(tq, now) do
+      {:ok, entry} -> {:ok, value(entry)}
+      other -> other
+    end
+  end
+
+  @doc """
+  Returns the next event of the queue with the current system time as `now/0`.
+
+  See `peek_entry/2`.
+  """
+  @spec peek_entry(t) :: peek_entry_return()
+  def peek_entry(tq),
+    do: peek_entry(tq, now())
 
   @doc """
   Returns the next event of the queue according to the given current time in
@@ -121,14 +145,14 @@ defmodule TimeQueue do
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.peek(tq, _now = 20)
-      iex> {:ok, _} = TimeQueue.peek(tq, _now = 100)
+      iex> {:delay, ^tref, 80} = TimeQueue.peek_entry(tq, _now = 20)
+      iex> {:ok, _} = TimeQueue.peek_entry(tq, _now = 100)
   """
-  @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
-  def peek(%{s: 0}, _),
+  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_entry_return()
+  def peek_entry(%{s: 0}, _),
     do: :empty
 
-  def peek(%{q: [h | _]}, now) do
+  def peek_entry(%{q: [h | _]}, now) do
     case h do
       %{k: %{t: ts}} = entry when ts <= now -> {:ok, entry}
       %{k: %{t: ts} = tref} -> {:delay, tref, ts - now}
@@ -172,7 +196,7 @@ defmodule TimeQueue do
   @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
   def pop(tq, now) do
     case pop_entry(tq, now) do
-      {:ok, entry_value, tq2} -> {:ok, value(entry_value), tq2}
+      {:ok, entry, tq2} -> {:ok, value(entry), tq2}
       other -> other
     end
   end
@@ -324,7 +348,7 @@ defmodule TimeQueue do
       iex> tq = TimeQueue.new()
       iex> {:ok, _, tq} = TimeQueue.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek(tq)
+      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
       iex> TimeQueue.value(entry)
       :my_value
   """
@@ -337,7 +361,7 @@ defmodule TimeQueue do
       iex> tq = TimeQueue.new()
       iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek(tq)
+      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
       iex> tref == TimeQueue.tref(entry)
       true
   """
@@ -346,7 +370,7 @@ defmodule TimeQueue do
 
   @doc """
   This function is used internally to determine the current time when it is not
-  given in the arguments to `enqueue/3`, `pop/1`, `pop_entry/1` and `peek/1`.
+  given in the arguments to `enqueue/3`, `pop/1`, `pop_entry/1` and `peek_entry/1`.
 
   It is a simple alias to `:erlang.system_time(:millisecond)`. TimeQueue does
   not use monotonic time since it already manages its own unique identifiers for
