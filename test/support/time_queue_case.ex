@@ -21,8 +21,7 @@ defmodule TimeQueueCase do
         assert :myval = TQ.value(entry)
 
         # POP
-        assert {:ok, entry, tq} = TQ.pop(tq)
-        assert :myval = TQ.value(entry)
+        assert {:ok, :myval, tq} = TQ.pop(tq)
 
         assert :empty = TQ.pop(tq)
       end
@@ -154,6 +153,38 @@ defmodule TimeQueueCase do
 
           assert {:ok, json} = Jason.encode(tq, pretty: true)
         end
+      end
+
+      test "peek/pop entries or values" do
+        tq = TQ.new()
+
+        # assert {:ok, tref, tq} =
+        #          TQ.enqueue(tq, {500, :ms}, :myval)
+        #          |> IO.inspect(label: "enqueue")
+
+        # # In case of a delay the behaviour was not changed in v0.8
+        # assert {:delay, ^tref, _delay} =
+        #          TQ.peek(tq)
+        #          |> IO.inspect(label: "peek")
+
+        # assert {:delay, ^tref, delay} =
+        #          TQ.pop(tq)
+        #          |> IO.inspect(label: "pop")
+
+        # # But with a succesful return we only get the value
+        # # assert {:ok, :myval} = TQ.peek(tq)
+        # assert {:ok, :myval, _} =
+        #          TQ.pop(tq)
+        #          |> IO.inspect(label: "pop")
+
+        # # The old behaviour is available
+        # # assert {:ok, entry_peeked} = TQ.peek_entry(tq)
+        # # assert :myval = TQ.value(entry)
+        # assert {:ok, entry_poped, _} =
+        #          TQ.pop_entry(tq)
+        #          |> IO.inspect(label: "entry pop")
+
+        # assert :myval = TQ.value(entry_poped)
       end
     end
   end

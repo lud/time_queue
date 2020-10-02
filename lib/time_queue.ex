@@ -52,13 +52,15 @@ defmodule TimeQueue do
           | :weeks
 
   @opaque t :: %{m: max_id :: integer, s: size :: non_neg_integer, q: list(entry)}
-  @opaque entry :: %{k: tref, v: value :: any}
+  @type entry_value :: any
+  @opaque entry :: %{k: tref, v: entry_value}
   @type timespec :: {pos_integer, timespec_unit}
   @type ttl :: timespec | integer
   @type timestamp_ms :: pos_integer
   @opaque tref :: %{t: timestamp_ms, u: integer}
   # @todo add values typing
-  @type pop_return(tq) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry(), tq}
+  @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry(), t}
+  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value, t}
   @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry()}
   @type enqueue_return(tq) :: {:ok, tref, tq}
 
@@ -134,16 +136,58 @@ defmodule TimeQueue do
   end
 
   @doc """
-  Extracts the next event of the queue with the current system time as `now/0`.
+  Extracts the next entry in the queue with the current system time as `now/0`.
 
   See `pop/2`.
   """
-  @spec pop(t) :: pop_return(t)
+  @spec pop(t) :: pop_return()
   def pop(tq),
     do: pop(tq, now())
 
+  @doc ~S"""
+  Extracts the next entry in the queue according to the given current time in
+  milliseconds. 
+
+  Much like `pop_entry/2` but the tuple returned when an entry time is reached
+  (returns with `:ok`) success will only contain the value inserted in the
+  queue.
+
+  Possible return values are:
+
+  - `:empty`
+  - `{:ok, value, new_queue}` if the timestamp of the first entry is `<=` to the
+    given current time. The entry is deleted from `new_queue`.
+  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+    current time. The remaining amount of milliseconds is returned.
+
+  ### Example
+
+      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.pop(tq, _now = 20)
+      iex> {:ok, value, _} = TimeQueue.pop(tq, _now = 100)
+      iex> value
+      :hello
+  """
+
+  @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
+  def pop(tq, now) do
+    case pop_entry(tq, now) do
+      {:ok, entry_value, tq2} -> {:ok, value(entry_value), tq2}
+      other -> other
+    end
+  end
+
   @doc """
-  Extracts the next event of the queue according to the given current time in
+  Extracts the next entry in the queue with the current system time as `now/0`.
+
+  See `pop_entry/2`.
+  """
+  @spec pop_entry(t) :: pop_entry_return()
+  def pop_entry(tq),
+    do: pop_entry(tq, now())
+
+  @doc ~S"""
+  Extracts the next entry in the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
@@ -157,14 +201,16 @@ defmodule TimeQueue do
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.pop(tq, _now = 20)
-      iex> {:ok, _, _} = TimeQueue.pop(tq, _now = 100)
+      iex> {:delay, ^tref, 80} = TimeQueue.pop_entry(tq, _now = 20)
+      iex> {:ok, entry, _} = TimeQueue.pop_entry(tq, _now = 100)
+      iex> TimeQueue.value(entry)
+      :hello
   """
-  @spec pop(t, now_ms :: timestamp_ms) :: pop_return(t)
-  def pop(%{s: 0}, _),
+  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_entry_return()
+  def pop_entry(%{s: 0}, _),
     do: :empty
 
-  def pop(%{s: size, q: [h | tail]} = tq, now) do
+  def pop_entry(%{s: size, q: [h | tail]} = tq, now) do
     case h do
       %{k: %{t: ts}} = entry when ts <= now ->
         tq = %{tq | s: size - 1, q: tail}
@@ -299,8 +345,8 @@ defmodule TimeQueue do
   def tref(%{k: tref}), do: tref
 
   @doc """
-  This function is used internally to determine the current time when it is
-  not given in the arguments to `enqueue/3`, `pop/1` and `peek/1`.
+  This function is used internally to determine the current time when it is not
+  given in the arguments to `enqueue/3`, `pop/1`, `pop_entry/1` and `peek/1`.
 
   It is a simple alias to `:erlang.system_time(:millisecond)`. TimeQueue does
   not use monotonic time since it already manages its own unique identifiers for

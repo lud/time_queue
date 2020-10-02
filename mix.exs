@@ -26,7 +26,10 @@ defmodule TimeQueue.MixProject do
       TimeQueue is a simple functional timer queue (no processes, no messaging, no erlang timers) based on gb_trees.
       """,
       licenses: ["MIT"],
-      links: %{"Github" => "https://github.com/lud/time_queue"}
+      links: %{
+        "Github" => "https://github.com/lud/time_queue",
+        "CHANGELOG" => "https://github.com/lud/time_queue/blob/master/CHANGELOG.md"
+      }
     ]
   end
 
