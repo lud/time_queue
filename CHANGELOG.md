@@ -9,13 +9,20 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 ---
 
 ### New
-* Enhanced docs
 
 ### Changes
 
 ### Fixes
 
 ### Breaks
+
+
+## 0.9.0 - (2020-10-03)
+---
+
+### New
+* Renamed all 'entry' elements with 'event' instead. Added aliases to support functions named ...entry.
+* Enhanced docs
 
 
 ## 0.8.0 - (2020-10-02)

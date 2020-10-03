@@ -84,8 +84,8 @@ defmodule TimeQueueCase do
 
     # PEEK
     assert {:ok, :myval} = mod.peek(tq)
-    assert {:ok, entry} = mod.peek_entry(tq)
-    assert :myval = mod.value(entry)
+    assert {:ok, event} = mod.peek_event(tq)
+    assert :myval = mod.value(event)
 
     # POP
     assert {:ok, :myval, tq} = mod.pop(tq)
@@ -126,12 +126,12 @@ defmodule TimeQueueCase do
   def timers_are_deletable_by_ref(mod) do
     tq = mod.new()
     assert {:ok, tref, tq} = mod.enqueue(tq, 0, :hello)
-    assert {:ok, entry} = mod.peek_entry(tq)
-    assert tref == mod.tref(entry)
-    # deleting an entry
-    tq_del_entry = mod.delete(tq, entry)
-    assert 0 = mod.size(tq_del_entry)
-    # deleting an entry by tref
+    assert {:ok, event} = mod.peek_event(tq)
+    assert tref == mod.tref(event)
+    # deleting an event
+    tq_del_event = mod.delete(tq, event)
+    assert 0 = mod.size(tq_del_event)
+    # deleting an event by tref
     tq_del_tref = mod.delete(tq, tref)
     assert 0 = mod.size(tq_del_tref)
 
@@ -182,10 +182,10 @@ defmodule TimeQueueCase do
     assert {:ok, :myval, _} = mod.pop(tq)
 
     # # The old behaviour is available
-    assert {:ok, entry_peeked} = mod.peek_entry(tq)
-    assert {:ok, entry_poped, _} = mod.pop_entry(tq)
-    assert :myval = mod.value(entry_peeked)
-    assert :myval = mod.value(entry_poped)
+    assert {:ok, event_peeked} = mod.peek_event(tq)
+    assert {:ok, event_poped, _} = mod.pop_event(tq)
+    assert :myval = mod.value(event_peeked)
+    assert :myval = mod.value(event_poped)
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do

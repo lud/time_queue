@@ -10,7 +10,7 @@ defmodule TimeQueue do
   All map keys are shrinked to a single letter as this queue is intended to
   be encoded and published to HTTP clients over the wire, mutiple times.
 
-  The queue keys are a map composed of the timestamp (`t`) of an entry
+  The queue keys are a map composed of the timestamp (`t`) of an event
   and an unique integer (`u`).
 
   No erlang timers or processes are used, as the queue is only a
@@ -51,17 +51,17 @@ defmodule TimeQueue do
           | :week
           | :weeks
 
-  @opaque t :: %{m: max_id :: integer, s: size :: non_neg_integer, q: list(entry)}
-  @type entry_value :: any
-  @opaque entry :: %{k: tref, v: entry_value}
+  @opaque t :: %{m: max_id :: integer, s: size :: non_neg_integer, q: list(event)}
+  @type event_value :: any
+  @opaque event :: %{k: tref, v: event_value}
   @type timespec :: {pos_integer, timespec_unit}
   @type ttl :: timespec | integer
   @type timestamp_ms :: pos_integer
   @opaque tref :: %{t: timestamp_ms, u: integer}
-  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value, t}
-  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value}
-  @type peek_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry}
-  @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry, t}
+  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value, t}
+  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value}
+  @type peek_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
+  @type pop_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   @type enqueue_return() :: {:ok, tref, t}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
@@ -83,7 +83,7 @@ defmodule TimeQueue do
   Creates an empty time queue.
 
       iex> tq = TimeQueue.new()
-      iex> TimeQueue.peek_entry(tq)
+      iex> TimeQueue.peek_event(tq)
       :empty
   """
   @spec new :: t
@@ -111,28 +111,28 @@ defmodule TimeQueue do
   Returns the next value of the queue, or a delay, according to the given
   current time in milliseconds.
 
-  Just like `pop/2` _vs._ `pop_entry/2`, `peek` wil only return `{:ok, value}`
-  when a timeout is reached whereas `peek_entry` will return `{:ok, entry}`.
+  Just like `pop/2` _vs._ `pop_event/2`, `peek` wil only return `{:ok, value}`
+  when a timeout is reached whereas `peek_event` will return `{:ok, event}`.
   """
   @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
   def peek(tq, now) do
-    case peek_entry(tq, now) do
-      {:ok, entry} -> {:ok, value(entry)}
+    case peek_event(tq, now) do
+      {:ok, event} -> {:ok, value(event)}
       other -> other
     end
   end
 
   @doc """
-  Returns the next entry of the queue or a delay in milliseconds before the next
+  Returns the next event of the queue or a delay in milliseconds before the next
   value.
 
-  Entry values can be retrieved with `TimeQueue.value/1`.
+  event values can be retrieved with `TimeQueue.value/1`.
 
-  See `peek_entry/2`.
+  See `peek_event/2`.
   """
-  @spec peek_entry(t) :: peek_entry_return()
-  def peek_entry(tq),
-    do: peek_entry(tq, now())
+  @spec peek_event(t) :: peek_event_return()
+  def peek_event(tq),
+    do: peek_event(tq, now())
 
   @doc """
   Returns the next event of the queue according to the given current time in
@@ -141,30 +141,30 @@ defmodule TimeQueue do
   Possible return values are:
 
   - `:empty`
-  - `{:ok, entry}` if the timestamp of the first entry is `<=` to the given
+  - `{:ok, event}` if the timestamp of the first event is `<=` to the given
     current time.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.peek_entry(tq, _now = 20)
-      iex> {:ok, _} = TimeQueue.peek_entry(tq, _now = 100)
+      iex> {:delay, ^tref, 80} = TimeQueue.peek_event(tq, _now = 20)
+      iex> {:ok, _} = TimeQueue.peek_event(tq, _now = 100)
   """
-  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_entry_return()
-  def peek_entry(%{s: 0}, _),
+  @spec peek_event(t, now_ms :: timestamp_ms) :: peek_event_return()
+  def peek_event(%{s: 0}, _),
     do: :empty
 
-  def peek_entry(%{q: [h | _]}, now) do
+  def peek_event(%{q: [h | _]}, now) do
     case h do
-      %{k: %{t: ts}} = entry when ts <= now -> {:ok, entry}
+      %{k: %{t: ts}} = event when ts <= now -> {:ok, event}
       %{k: %{t: ts} = tref} -> {:delay, tref, ts - now}
     end
   end
 
   @doc """
-  Extracts the next entry in the queue or returns a delay.
+  Extracts the next event in the queue or returns a delay.
 
   See `pop/2`.
   """
@@ -173,19 +173,19 @@ defmodule TimeQueue do
     do: pop(tq, now())
 
   @doc ~S"""
-  Extracts the next entry in the queue according to the given current time in
+  Extracts the next event in the queue according to the given current time in
   milliseconds. 
 
-  Much like `pop_entry/2` but the tuple returned when an entry time is reached
+  Much like `pop_event/2` but the tuple returned when an event time is reached
   (returns with `:ok`) success will only contain the value inserted in the
   queue.
 
   Possible return values are:
 
   - `:empty`
-  - `{:ok, value, new_queue}` if the timestamp of the first entry is `<=` to the
-    given current time. The entry is deleted from `new_queue`.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:ok, value, new_queue}` if the timestamp of the first event is `<=` to the
+    given current time. The event is deleted from `new_queue`.
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
@@ -198,50 +198,50 @@ defmodule TimeQueue do
   """
   @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
   def pop(tq, now) do
-    case pop_entry(tq, now) do
-      {:ok, entry, tq2} -> {:ok, value(entry), tq2}
+    case pop_event(tq, now) do
+      {:ok, event, tq2} -> {:ok, value(event), tq2}
       other -> other
     end
   end
 
   @doc """
-  Extracts the next entry in the queue with the current system time as `now/0`.
+  Extracts the next event in the queue with the current system time as `now/0`.
 
-  See `pop_entry/2`.
+  See `pop_event/2`.
   """
-  @spec pop_entry(t) :: pop_entry_return()
-  def pop_entry(tq),
-    do: pop_entry(tq, now())
+  @spec pop_event(t) :: pop_event_return()
+  def pop_event(tq),
+    do: pop_event(tq, now())
 
   @doc ~S"""
-  Extracts the next entry in the queue according to the given current time in
+  Extracts the next event in the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
 
   - `:empty`
-  - `{:ok, entry, new_queue}` if the timestamp of the first entry is `<=` to the
-    given current time. The entry is deleted from `new_queue`.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:ok, event, new_queue}` if the timestamp of the first event is `<=` to the
+    given current time. The event is deleted from `new_queue`.
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.pop_entry(tq, _now = 20)
-      iex> {:ok, entry, _} = TimeQueue.pop_entry(tq, _now = 100)
-      iex> TimeQueue.value(entry)
+      iex> {:delay, ^tref, 80} = TimeQueue.pop_event(tq, _now = 20)
+      iex> {:ok, event, _} = TimeQueue.pop_event(tq, _now = 100)
+      iex> TimeQueue.value(event)
       :hello
   """
-  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_entry_return()
-  def pop_entry(%{s: 0}, _),
+  @spec pop_event(t, now_ms :: timestamp_ms) :: pop_event_return()
+  def pop_event(%{s: 0}, _),
     do: :empty
 
-  def pop_entry(%{s: size, q: [h | tail]} = tq, now) do
+  def pop_event(%{s: size, q: [h | tail]} = tq, now) do
     case h do
-      %{k: %{t: ts}} = entry when ts <= now ->
+      %{k: %{t: ts}} = event when ts <= now ->
         tq = %{tq | s: size - 1, q: tail}
-        {:ok, entry, tq}
+        {:ok, event, tq}
 
       %{k: %{t: ts} = tref} ->
         {:delay, tref, ts - now}
@@ -249,17 +249,17 @@ defmodule TimeQueue do
   end
 
   @doc """
-  Deletes an entry from the queue and returns the new queue.
+  Deletes an event from the queue and returns the new queue.
 
-  It accepts a time reference or a full entry. When an entry is given,
-  its time reference will be used to find the entry to  delete,
-  meaning the queue entry will be deleted even if the value of the
-  passed entry was tampered.
+  It accepts a time reference or a full event. When an event is given,
+  its time reference will be used to find the event to  delete,
+  meaning the queue event will be deleted even if the value of the
+  passed event was tampered.
 
-  The function does not fail if the entry cannot be found and simply
+  The function does not fail if the event cannot be found and simply
   returns the queue as-is.
   """
-  @spec delete(t, entry | tref) :: t
+  @spec delete(t, event | tref) :: t
   def delete(tq, %{k: tref}),
     do: delete(tq, tref)
 
@@ -280,7 +280,7 @@ defmodule TimeQueue do
 
   Use `filter_val/2` to filter only using values.
   """
-  @spec filter(t, (entry -> bool)) :: t
+  @spec filter(t, (event -> bool)) :: t
   def filter(%{q: q} = tq, fun) do
     new_q = Enum.filter(q, fun)
     %{tq | s: length(new_q), q: new_q}
@@ -290,7 +290,7 @@ defmodule TimeQueue do
   Returns a new queue with entries for whom the given callback returned a truthy
   value.
 
-  Unlinke `filter/2`, the callback is only passed the entry value.
+  Unlinke `filter/2`, the callback is only passed the event value.
   """
   @spec filter_val(t, (any -> bool)) :: t
   def filter_val(tq, fun) do
@@ -298,7 +298,7 @@ defmodule TimeQueue do
   end
 
   @doc """
-  Adds a new entry to the queue with a TTL and the current system time as `now/0`.
+  Adds a new event to the queue with a TTL and the current system time as `now/0`.
 
   See `enqueue/4`.
   """
@@ -307,7 +307,7 @@ defmodule TimeQueue do
     do: enqueue(tq, ttl, val, now())
 
   @doc """
-  Adds a new entry to the queue with a TTL relative to the given timestamp in
+  Adds a new event to the queue with a TTL relative to the given timestamp in
   milliseconds.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
@@ -322,7 +322,7 @@ defmodule TimeQueue do
     do: enqueue_abs(tq, now + ttl, val)
 
   @doc """
-  Adds a new entry to the queue with an absolute timestamp.
+  Adds a new event to the queue with an absolute timestamp.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
@@ -330,8 +330,8 @@ defmodule TimeQueue do
   def enqueue_abs(%{m: max_id, s: size, q: q} = tq, ts, val) do
     new_max_id = bump_max_id(max_id)
     tref = %{t: ts, u: new_max_id}
-    entry = %{k: tref, v: val}
-    q = insert(q, entry)
+    event = %{k: tref, v: val}
+    q = insert(q, event)
     {:ok, tref, %{tq | s: size + 1, q: q, m: new_max_id}}
   end
 
@@ -347,37 +347,67 @@ defmodule TimeQueue do
   defp bump_max_id(@max_int), do: @min_int
 
   @doc """
-  Returns the value of an queue entry.
+  Returns the value of an queue event.
       iex> tq = TimeQueue.new()
       iex> {:ok, _, tq} = TimeQueue.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
-      iex> TimeQueue.value(entry)
+      iex> {:ok, event} = TimeQueue.peek_event(tq)
+      iex> TimeQueue.value(event)
       :my_value
   """
-  @spec value(entry) :: any
+  @spec value(event) :: any
   def value(%{v: val}), do: val
 
   @doc """
-  Returns the time reference of an queue entry. This reference is
-  used as a key to identify a unique entry.
+  Returns the time reference of an queue event. This reference is
+  used as a key to identify a unique event.
       iex> tq = TimeQueue.new()
       iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
-      iex> tref == TimeQueue.tref(entry)
+      iex> {:ok, event} = TimeQueue.peek_event(tq)
+      iex> tref == TimeQueue.tref(event)
       true
   """
-  @spec tref(entry) :: any
+  @spec tref(event) :: any
   def tref(%{k: tref}), do: tref
 
+  @doc false
   def supports_encoding(:json), do: true
   def supports_encoding(:etf), do: true
   def supports_encoding(_), do: false
 
+  # OLD Names functions
+  @doc """
+  Alias for `peek_event/1`.
+  """
+  @deprecated "Use peek_event/1 instead"
+  @spec peek_entry(t) :: peek_event_return()
+  def peek_entry(tq), do: peek_event(tq)
+
+  @doc """
+  Alias for `peek_event/2`.
+  """
+  @deprecated "Use peek_event/2 instead"
+  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_event_return()
+  def peek_entry(tq, now_ms), do: peek_event(tq, now_ms)
+
+  @doc """
+  Alias for `pop_event/1`.
+  """
+  @deprecated "Use pop_event/1 instead"
+  @spec pop_entry(t) :: pop_event_return()
+  def pop_entry(tq), do: pop_event(tq)
+
+  @doc """
+  Alias for `pop_event/2`.
+  """
+  @deprecated "Use pop_event/2 instead"
+  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_event_return()
+  def pop_entry(tq, now_ms), do: pop_event(tq, now_ms)
+
   @doc """
   This function is used internally to determine the current time when using
-  functions `enqueue/3`, `pop/1`, `pop_entry/1` and `peek_entry/1`.
+  functions `enqueue/3`, `pop/1`, `pop_event/1` and `peek_event/1`.
 
   It is a simple alias to `:erlang.system_time(:millisecond)`. TimeQueue does
   not use monotonic time since it already manages its own unique identifiers for

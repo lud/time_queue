@@ -5,7 +5,7 @@ defmodule TimeQueue.GbTrees do
   @moduledoc """
   Implements a timers queue based on [gb_trees](http://erlang.org/doc/man/gb_trees.html).
 
-  The queue keys are a two-tuple composed of the timestamp of an entry
+  The queue keys are a two-tuple composed of the timestamp of an event
   and an unique integer.
 
   No erlang timers or processes are used, as the queue is only a
@@ -56,12 +56,12 @@ defmodule TimeQueue.GbTrees do
   @type timestamp_ms :: pos_integer
   @opaque tref :: {timestamp_ms, integer}
   @opaque id :: integer
-  @opaque entry :: record(:tqrec, tref: tref, val: any)
-  @type entry_value :: any
-  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value, t}
-  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value}
-  @type peek_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry}
-  @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry, t}
+  @opaque event :: record(:tqrec, tref: tref, val: any)
+  @type event_value :: any
+  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value, t}
+  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value}
+  @type peek_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
+  @type pop_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   @type enqueue_return() :: {:ok, tref, t}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
@@ -83,7 +83,7 @@ defmodule TimeQueue.GbTrees do
   Creates an empty time queue.
 
       iex> tq = TimeQueue.GbTrees.new()
-      iex> TimeQueue.GbTrees.peek_entry(tq)
+      iex> TimeQueue.GbTrees.peek_event(tq)
       :empty
   """
   @spec new :: t
@@ -111,49 +111,49 @@ defmodule TimeQueue.GbTrees do
   Returns the next value of the queue, or a delay, according to the given
   current time in milliseconds.
 
-  Just like `pop/2` _vs._ `pop_entry/2`, `peek` wil only return `{:ok, value}`
-  when a timeout is reached whereas `peek_entry` will return `{:ok, entry}`.
+  Just like `pop/2` _vs._ `pop_event/2`, `peek` wil only return `{:ok, value}`
+  when a timeout is reached whereas `peek_event` will return `{:ok, event}`.
   """
   @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
   def peek(tq, now) do
-    case peek_entry(tq, now) do
-      {:ok, entry} -> {:ok, value(entry)}
+    case peek_event(tq, now) do
+      {:ok, event} -> {:ok, value(event)}
       other -> other
     end
   end
 
   @doc """
-  Returns the next entry of the queue or a delay in milliseconds before the next
+  Returns the next event of the queue or a delay in milliseconds before the next
   value.
 
-  Entry values can be retrieved with `TimeQueue.GbTrees.value/1`.
+  event values can be retrieved with `TimeQueue.GbTrees.value/1`.
 
-  See `peek_entry/2`.
+  See `peek_event/2`.
   """
-  @spec peek_entry(t) :: peek_entry_return()
-  def peek_entry(tq),
-    do: peek_entry(tq, now())
+  @spec peek_event(t) :: peek_event_return()
+  def peek_event(tq),
+    do: peek_event(tq, now())
 
   @doc """
-  Returns the next entry of the queue according to the given current time in
+  Returns the next event of the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
 
   - `:empty`
-  - `{:ok, entry}` if the timestamp of the first entry is `<=` to the given
+  - `{:ok, event}` if the timestamp of the first event is `<=` to the given
     current time.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.GbTrees.new() |> TimeQueue.GbTrees.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.peek_entry(tq, _now = 20)
-      iex> {:ok, _} = TimeQueue.GbTrees.peek_entry(tq, _now = 100)
+      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.peek_event(tq, _now = 20)
+      iex> {:ok, _} = TimeQueue.GbTrees.peek_event(tq, _now = 100)
   """
-  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_entry_return()
-  def peek_entry({_, tree}, now) do
+  @spec peek_event(t, now_ms :: timestamp_ms) :: peek_event_return()
+  def peek_event({_, tree}, now) do
     if Tree.is_empty(tree) do
       :empty
     else
@@ -165,7 +165,7 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Extracts the next entry in the queue or returns a delay.
+  Extracts the next event in the queue or returns a delay.
 
   See `pop/2`.
   """
@@ -174,19 +174,19 @@ defmodule TimeQueue.GbTrees do
     do: pop(tq, now())
 
   @doc ~S"""
-  Extracts the next entry in the queue according to the given current time in
+  Extracts the next event in the queue according to the given current time in
   milliseconds. 
 
-  Much like `pop_entry/2` but the tuple returned when an entry time is reached
+  Much like `pop_event/2` but the tuple returned when an event time is reached
   (returns with `:ok`) success will only contain the value inserted in the
   queue.
 
   Possible return values are:
 
   - `:empty`
-  - `{:ok, value, new_queue}` if the timestamp of the first entry is `<=` to the
-    given current time. The entry is deleted from `new_queue`.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:ok, value, new_queue}` if the timestamp of the first event is `<=` to the
+    given current time. The event is deleted from `new_queue`.
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
@@ -199,41 +199,41 @@ defmodule TimeQueue.GbTrees do
   """
   @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
   def pop(tq, now) do
-    case pop_entry(tq, now) do
-      {:ok, entry, tq2} -> {:ok, value(entry), tq2}
+    case pop_event(tq, now) do
+      {:ok, event, tq2} -> {:ok, value(event), tq2}
       other -> other
     end
   end
 
   @doc """
-  Extracts the next entry of the queue with the current system time as `now/0`.
+  Extracts the next event of the queue with the current system time as `now/0`.
 
-  See `pop_entry/2`.
+  See `pop_event/2`.
   """
-  @spec pop_entry(t) :: pop_entry_return()
-  def pop_entry(tq),
-    do: pop_entry(tq, now())
+  @spec pop_event(t) :: pop_event_return()
+  def pop_event(tq),
+    do: pop_event(tq, now())
 
   @doc """
-  Extracts the next entry of the queue according to the given current time in
+  Extracts the next event of the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
 
   - `:empty`
-  - `{:ok, entry, new_queue}` if the timestamp of the first entry is `<=` to the
-    given current time. The entry is deleted from `new_queue`.
-  - `{:delay, tref, ms}` if the timestamp of the first entry is `>` to the given
+  - `{:ok, event, new_queue}` if the timestamp of the first event is `<=` to the
+    given current time. The event is deleted from `new_queue`.
+  - `{:delay, tref, ms}` if the timestamp of the first event is `>` to the given
     current time. The remaining amount of milliseconds is returned.
 
   ### Example
 
       iex> {:ok, tref, tq} = TimeQueue.GbTrees.new() |> TimeQueue.GbTrees.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop_entry(tq, _now = 20)
-      iex> {:ok, _, _} = TimeQueue.GbTrees.pop_entry(tq, _now = 100)
+      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop_event(tq, _now = 20)
+      iex> {:ok, _, _} = TimeQueue.GbTrees.pop_event(tq, _now = 100)
   """
-  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_entry_return()
-  def pop_entry({max_id, tree}, now) do
+  @spec pop_event(t, now_ms :: timestamp_ms) :: pop_event_return()
+  def pop_event({max_id, tree}, now) do
     if Tree.is_empty(tree) do
       :empty
     else
@@ -249,17 +249,17 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Deletes an entry from the queue and returns the new queue.
+  Deletes an event from the queue and returns the new queue.
 
-  It accepts a time reference or a full entry. When an entry is given,
-  its time reference will be used to find the entry to  delete,
-  meaning the queue entry will be deleted even if the value of the
-  passed entry was tampered.
+  It accepts a time reference or a full event. When an event is given,
+  its time reference will be used to find the event to  delete,
+  meaning the queue event will be deleted even if the value of the
+  passed event was tampered.
 
-  The function does not fail if the entry cannot be found and simply
+  The function does not fail if the event cannot be found and simply
   returns the queue as-is.
   """
-  @spec delete(t, entry | tref) :: t
+  @spec delete(t, event | tref) :: t
   def delete(tq, tqrec(tref: tref)),
     do: delete(tq, tref)
 
@@ -284,7 +284,7 @@ defmodule TimeQueue.GbTrees do
   convert the tree to and ordered list, filter the list, and convert back to a
   tree.
   """
-  @spec filter(t, (entry -> bool)) :: t
+  @spec filter(t, (event -> bool)) :: t
   def filter({max_id, tree}, fun) do
     tree =
       tree
@@ -299,7 +299,7 @@ defmodule TimeQueue.GbTrees do
   Returns a new queue with entries for whom the given callback returned a truthy
   value.
 
-  Unlinke `filter/2`, the callback is only passed the entry value.
+  Unlinke `filter/2`, the callback is only passed the event value.
 
   This function is slow with `gb_trees`, see `filter/2`.
   """
@@ -309,7 +309,7 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Adds a new entry to the queue with a TTL and the current system time as `now/0`.
+  Adds a new event to the queue with a TTL and the current system time as `now/0`.
 
   See `enqueue/4`.
   """
@@ -318,7 +318,7 @@ defmodule TimeQueue.GbTrees do
     do: enqueue(tq, ttl, val, now())
 
   @doc """
-  Adds a new entry to the queue with a TTL relative to the given timestamp in
+  Adds a new event to the queue with a TTL relative to the given timestamp in
   milliseconds.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
@@ -333,7 +333,7 @@ defmodule TimeQueue.GbTrees do
     do: enqueue_abs(tq, now + ttl, val)
 
   @doc """
-  Adds a new entry to the queue with an absolute timestamp.
+  Adds a new event to the queue with an absolute timestamp.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
@@ -349,30 +349,60 @@ defmodule TimeQueue.GbTrees do
   defp bump_max_id(@max_int), do: @min_int
 
   @doc """
-  Returns the value of an queue entry.
+  Returns the value of an queue event.
       iex> tq = TimeQueue.GbTrees.new()
       iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.GbTrees.peek_entry(tq)
-      iex> TimeQueue.GbTrees.value(entry)
+      iex> {:ok, event} = TimeQueue.GbTrees.peek_event(tq)
+      iex> TimeQueue.GbTrees.value(event)
       :my_value
   """
-  @spec value(entry) :: any
+  @spec value(event) :: any
   def value(tqrec(val: val)), do: val
 
   @doc """
-  Returns the time reference of an queue entry. This reference is
-  used as a key to identify a unique entry.
+  Returns the time reference of an queue event. This reference is
+  used as a key to identify a unique event.
       iex> tq = TimeQueue.GbTrees.new()
       iex> {:ok, tref, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.GbTrees.peek_entry(tq)
-      iex> tref == TimeQueue.GbTrees.tref(entry)
+      iex> {:ok, event} = TimeQueue.GbTrees.peek_event(tq)
+      iex> tref == TimeQueue.GbTrees.tref(event)
       true
   """
-  @spec tref(entry) :: any
+  @spec tref(event) :: any
   def tref(tqrec(tref: tref)), do: tref
 
+  @doc false
   def supports_encoding(:etf), do: true
   def supports_encoding(_), do: false
+
+  # OLD Names functions
+  @doc """
+  Alias for `peek_event/1`.
+  """
+  @deprecated "Use peek_event/1 instead"
+  @spec peek_entry(t) :: peek_event_return()
+  def peek_entry(tq), do: peek_event(tq)
+
+  @doc """
+  Alias for `peek_event/2`.
+  """
+  @deprecated "Use peek_event/2 instead"
+  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_event_return()
+  def peek_entry(tq, now_ms), do: peek_event(tq, now_ms)
+
+  @doc """
+  Alias for `pop_event/1`.
+  """
+  @deprecated "Use pop_event/1 instead"
+  @spec pop_entry(t) :: pop_event_return()
+  def pop_entry(tq), do: pop_event(tq)
+
+  @doc """
+  Alias for `pop_event/2`.
+  """
+  @deprecated "Use pop_event/2 instead"
+  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_event_return()
+  def pop_entry(tq, now_ms), do: pop_event(tq, now_ms)
 end

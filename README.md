@@ -11,9 +11,7 @@ persistent GenServers, …), for example in a board game.
 
 ## Changelog
 
-- `0.6.0` – **Breaking change**, the map implementation is now the default. The
-  previous implementation based on `gb_trees` is available in the
-  `TimeQueue.GbTrees` module.
+Please see the changelog on [Github (master branch)](https://github.com/lud/time_queue/blob/master/CHANGELOG.md).
 
 ## Installation
 
