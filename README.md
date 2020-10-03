@@ -18,7 +18,7 @@ Please see the changelog on [Github (master branch)](https://github.com/lud/time
 ```elixir
 def deps do
   [
-    {:time_queue, "~> 0.6.0"}
+    {:time_queue, "~> 0.9"}
   ]
 end
 ```
