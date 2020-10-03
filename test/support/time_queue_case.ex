@@ -1,72 +1,26 @@
 defmodule TimeQueueCase do
-  use ExUnit.CaseTemplate
-
   defmacro __using__(opts) do
-    impl = Keyword.fetch!(opts, :impl)
+    impl_module = Keyword.fetch!(opts, :module)
 
-    quote location: :keep do
+    quote do
       use ExUnit.Case, async: false
-      alias unquote(impl), as: TQ
-      doctest unquote(impl)
+
+      doctest unquote(impl_module)
+      @mod unquote(impl_module)
+      @runner unquote(__MODULE__)
 
       test "Basic API test" do
-        assert tq = TQ.new()
-        assert {:ok, tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
-        assert {:delay, ^tref, _delay} = TQ.peek(tq)
-        assert {:delay, ^tref, delay} = TQ.pop(tq)
-
-        Process.sleep(delay)
-
-        # PEEK
-        assert {:ok, :myval} = TQ.peek(tq)
-        assert {:ok, entry} = TQ.peek_entry(tq)
-        assert :myval = TQ.value(entry)
-
-        # POP
-        assert {:ok, :myval, tq} = TQ.pop(tq)
-
-        assert :empty = TQ.pop(tq)
+        @runner.basic_api_test(@mod)
       end
 
-      defp insert_pop_many(iters) do
-        tq = TQ.new()
-
-        {insert_usec, tq} =
-          :timer.tc(fn ->
-            Enum.reduce(1..iters, tq, fn i, tq ->
-              ts = :rand.uniform(10_000_000_000)
-              {:ok, _, tq} = TQ.enqueue_abs(tq, ts, i)
-              tq
-            end)
-          end)
-
-        assert iters === TQ.size(tq)
-
-        {pop_usec, final_val} =
-          :timer.tc(fn ->
-            unfold = fn
-              {:ok, _, tq}, f -> f.(TQ.pop(tq), f)
-              :empty, _f -> :ends_with_empty
-              {:start, tq}, f -> f.(TQ.pop(tq), f)
-            end
-
-            unfold.({:start, tq}, unfold)
-          end)
-
-        assert :ends_with_empty === final_val
-
-        IO.puts(
-          "\n[#{inspect(unquote(impl))}] insert/pop #{pad_num(iters)} records (ms): #{
-            fmt_usec(insert_usec)
-          } #{fmt_usec(pop_usec)}"
-        )
-      end
-
-      test "Inserting/popping many records with maps implementation" do
-        insert_pop_many(10)
-        insert_pop_many(100)
-        insert_pop_many(1000)
-        insert_pop_many(10000)
+      test "Inserting/popping many records with #{@mod} implementation" do
+        IO.puts("Running many iterations with #{@mod}")
+        IO.write("\n")
+        @runner.print_columns("Module", "Items", "Insert ms", "Pop ms")
+        @runner.insert_pop_many(@mod, 10)
+        @runner.insert_pop_many(@mod, 100)
+        @runner.insert_pop_many(@mod, 1000)
+        @runner.insert_pop_many(@mod, 10_000)
       end
 
       # Some bad test to check that performance is not degrading
@@ -82,101 +36,197 @@ defmodule TimeQueueCase do
       #   # |> Task.async_stream(fn f -> f.() end)
       #   # |> Stream.run()
       # end
-      defp fmt_usec(usec) do
-        usec
-        |> div(1000)
-        |> pad_num
-      end
-
-      defp pad_num(int) do
-        int
-        |> Integer.to_string()
-        |> String.pad_leading(6, " ")
-      end
 
       test "Timers are deletable by ref" do
-        tq = TQ.new()
-        assert {:ok, tref, tq} = TQ.enqueue(tq, 0, :hello)
-        assert {:ok, entry} = TQ.peek_entry(tq)
-        assert tref == TQ.tref(entry)
-        # deleting an entry
-        tq_del_entry = TQ.delete(tq, entry)
-        assert 0 = TQ.size(tq_del_entry)
-        # deleting an entry by tref
-        tq_del_tref = TQ.delete(tq, tref)
-        assert 0 = TQ.size(tq_del_tref)
-
-        # deleting a tref that does not exist 
-        # 
-        # As we are testing multiple implementations we will create another
-        # queue to get a valid tref
-        {:ok, bad_tref, _} = TQ.enqueue(TQ.new(), {5000, :ms}, :dummy)
-        tq_del_bad_tref = TQ.delete(tq, bad_tref)
-        assert 1 = TQ.size(tq_del_bad_tref)
+        @runner.timers_are_deletable_by_ref(@mod)
       end
 
       test "Timers are filterable" do
-        tq = TQ.new()
-        {:ok, _, tq} = TQ.enqueue(tq, 0, {:x, 1})
-        {:ok, _, tq} = TQ.enqueue(tq, 0, {:x, 2})
-        {:ok, _, tq} = TQ.enqueue(tq, 0, {:x, 2})
-        assert 3 = TQ.size(tq)
-
-        match_ones = fn {:x, i} -> i == 1 end
-
-        tq_ones = TQ.filter_val(tq, match_ones)
-        assert 1 = TQ.size(tq_ones)
+        @runner.timers_are_filterable(@mod)
       end
 
       # test "Timers are deletable by value" do
       #   # deleting by value delete all entries whose values are equal
-      #   tq = TQ.new()
-      #   {:ok, _, tq} = TQ.enqueue(tq, 0, :aaa)
-      #   {:ok, _, tq} = TQ.enqueue(tq, 0, :bbb)
+      #   tq = mod.new()
+      #   {:ok, _, tq} = mod.enqueue(tq, 0, :aaa)
+      #   {:ok, _, tq} = mod.enqueue(tq, 0, :bbb)
 
-      #   assert 2 = TQ.size(tq)
+      #   assert 2 = mod.size(tq)
 
       #   tq_no_vs =
-      #     TQ.delete_val(tq, :aaa)
+      #     mod.delete_val(tq, :aaa)
       #     |> IO.inspect(label: "tq_no_vs")
 
-      #   assert 1 = TQ.size(tq)
-      #   assert {:ok, last} = TQ.pop(tq)
-      #   assert :bbb = TQ.value(last)
+      #   assert 1 = mod.size(tq)
+      #   assert {:ok, last} = mod.pop(tq)
+      #   assert :bbb = mod.value(last)
       # end
 
       test "json encode a queue" do
-        if TQ.supports_encoding(:json) do
-          assert tq = TQ.new()
-          assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 1)
-          assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 2)
-          assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 3)
-          assert {:ok, _, tq} = TQ.enqueue(tq, {500, :ms}, 4)
-
-          assert {:ok, json} = Jason.encode(tq, pretty: true)
-        end
+        if @mod.supports_encoding(:json), do: @runner.json_encode_a_queue(@mod)
       end
 
       test "peek/pop entries or values" do
-        tq = TQ.new()
-        assert {:ok, tref, tq} = TQ.enqueue(tq, {500, :ms}, :myval)
-
-        # # In case of a delay the behaviour was not changed in v0.8
-        assert {:delay, ^tref, _delay} = TQ.peek(tq)
-        assert {:delay, ^tref, delay} = TQ.pop(tq)
-
-        Process.sleep(500)
-
-        # # But with a succesful return we only get the value
-        assert {:ok, :myval} = TQ.peek(tq)
-        assert {:ok, :myval, _} = TQ.pop(tq)
-
-        # # The old behaviour is available
-        assert {:ok, entry_peeked} = TQ.peek_entry(tq)
-        assert {:ok, entry_poped, _} = TQ.pop_entry(tq)
-        assert :myval = TQ.value(entry_peeked)
-        assert :myval = TQ.value(entry_poped)
+        @runner.peek_or_pop_entries_or_values(@mod)
       end
     end
+  end
+
+  import ExUnit.Assertions
+
+  def basic_api_test(mod) do
+    assert tq = mod.new()
+    assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval)
+    assert {:delay, ^tref, _delay} = mod.peek(tq)
+    assert {:delay, ^tref, delay} = mod.pop(tq)
+
+    Process.sleep(delay)
+
+    # PEEK
+    assert {:ok, :myval} = mod.peek(tq)
+    assert {:ok, entry} = mod.peek_entry(tq)
+    assert :myval = mod.value(entry)
+
+    # POP
+    assert {:ok, :myval, tq} = mod.pop(tq)
+
+    assert :empty = mod.pop(tq)
+  end
+
+  def insert_pop_many(mod, iters) do
+    tq = mod.new()
+
+    {insert_usec, tq} =
+      :timer.tc(fn ->
+        Enum.reduce(1..iters, tq, fn i, tq ->
+          ts = :rand.uniform(10_000_000_000)
+          {:ok, _, tq} = mod.enqueue_abs(tq, ts, i)
+          tq
+        end)
+      end)
+
+    assert iters === mod.size(tq)
+
+    {pop_usec, final_val} =
+      :timer.tc(fn ->
+        unfold = fn
+          {:ok, _, tq}, f -> f.(mod.pop(tq), f)
+          :empty, _f -> :ends_with_empty
+          {:start, tq}, f -> f.(mod.pop(tq), f)
+        end
+
+        unfold.({:start, tq}, unfold)
+      end)
+
+    assert :ends_with_empty === final_val
+
+    print_columns(mod, iters, insert_usec, pop_usec)
+  end
+
+  def timers_are_deletable_by_ref(mod) do
+    tq = mod.new()
+    assert {:ok, tref, tq} = mod.enqueue(tq, 0, :hello)
+    assert {:ok, entry} = mod.peek_entry(tq)
+    assert tref == mod.tref(entry)
+    # deleting an entry
+    tq_del_entry = mod.delete(tq, entry)
+    assert 0 = mod.size(tq_del_entry)
+    # deleting an entry by tref
+    tq_del_tref = mod.delete(tq, tref)
+    assert 0 = mod.size(tq_del_tref)
+
+    # deleting a tref that does not exist 
+    # 
+    # As we are testing multiple implementations we will create another
+    # queue to get a valid tref
+    {:ok, bad_tref, _} = mod.enqueue(mod.new(), {5000, :ms}, :dummy)
+    tq_del_bad_tref = mod.delete(tq, bad_tref)
+    assert 1 = mod.size(tq_del_bad_tref)
+  end
+
+  def timers_are_filterable(mod) do
+    tq = mod.new()
+    {:ok, _, tq} = mod.enqueue(tq, 0, {:x, 1})
+    {:ok, _, tq} = mod.enqueue(tq, 0, {:x, 2})
+    {:ok, _, tq} = mod.enqueue(tq, 0, {:x, 2})
+    assert 3 = mod.size(tq)
+
+    match_ones = fn {:x, i} -> i == 1 end
+
+    tq_ones = mod.filter_val(tq, match_ones)
+    assert 1 = mod.size(tq_ones)
+  end
+
+  def json_encode_a_queue(mod) do
+    assert tq = mod.new()
+    assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 1)
+    assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 2)
+    assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 3)
+    assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 4)
+
+    assert {:ok, json} = Jason.encode(tq, pretty: true)
+  end
+
+  def peek_or_pop_entries_or_values(mod) do
+    tq = mod.new()
+    assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval)
+
+    # # In case of a delay the behaviour was not changed in v0.8
+    assert {:delay, ^tref, _delay} = mod.peek(tq)
+    assert {:delay, ^tref, delay} = mod.pop(tq)
+
+    Process.sleep(500)
+
+    # # But with a succesful return we only get the value
+    assert {:ok, :myval} = mod.peek(tq)
+    assert {:ok, :myval, _} = mod.pop(tq)
+
+    # # The old behaviour is available
+    assert {:ok, entry_peeked} = mod.peek_entry(tq)
+    assert {:ok, entry_poped, _} = mod.pop_entry(tq)
+    assert :myval = mod.value(entry_peeked)
+    assert :myval = mod.value(entry_poped)
+  end
+
+  def print_columns(mod, iters, insert_usec, pop_usec) do
+    IO.puts([
+      pad_mod(mod),
+      pad_num(iters),
+      fmt_usec(insert_usec),
+      fmt_usec(pop_usec)
+    ])
+  end
+
+  @col_pad 12
+
+  def fmt_usec(usec) when is_integer(usec) do
+    usec
+    |> div(1000)
+    |> pad_num()
+  end
+
+  def fmt_usec(title), do: pad_col(title)
+
+  defp pad_num(int) when is_integer(int) do
+    int
+    |> Integer.to_string()
+    |> pad_col()
+  end
+
+  defp pad_num(title), do: pad_col(title)
+
+  defp pad_mod(module) when is_atom(module) do
+    module
+    |> inspect
+    |> String.split(".")
+    |> :lists.last()
+    |> pad_col()
+  end
+
+  defp pad_mod(text) when is_binary(text),
+    do: pad_col(text)
+
+  defp pad_col(text) when is_binary(text) do
+    String.pad_trailing(text, @col_pad, " ")
   end
 end

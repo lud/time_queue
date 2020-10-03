@@ -1,5 +1,7 @@
 # Implementation based on gb_trees
 defmodule TimeQueue.GbTrees do
+  import TimeQueue, only: [now: 0, timespec_add: 2]
+
   @moduledoc """
   Implements a timers queue based on [gb_trees](http://erlang.org/doc/man/gb_trees.html).
 
@@ -60,7 +62,7 @@ defmodule TimeQueue.GbTrees do
   @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry_value}
   @type peek_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry}
   @type pop_entry_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, entry, t}
-  @type enqueue_return(tq) :: {:ok, tref, tq}
+  @type enqueue_return() :: {:ok, tref, t}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
   # Hopefully in the meantime they will be no tref stored that would match any
@@ -80,8 +82,8 @@ defmodule TimeQueue.GbTrees do
   @doc """
   Creates an empty time queue.
 
-      iex> tq = TimeQueue.new()
-      iex> TimeQueue.peek_entry(tq)
+      iex> tq = TimeQueue.GbTrees.new()
+      iex> TimeQueue.GbTrees.peek_entry(tq)
       :empty
   """
   @spec new :: t
@@ -96,7 +98,8 @@ defmodule TimeQueue.GbTrees do
     do: Tree.size(tree)
 
   @doc """
-  Returns the next value of the queue with the current system time as `now/0`.
+  Returns the next value of the queue or a delay in milliseconds before the next
+  value.
 
   See `peek/2`.
   """
@@ -105,8 +108,8 @@ defmodule TimeQueue.GbTrees do
     do: peek(tq, now())
 
   @doc """
-  Returns the next value of the queue according to the given current time in
-  milliseconds.
+  Returns the next value of the queue, or a delay, according to the given
+  current time in milliseconds.
 
   Just like `pop/2` _vs._ `pop_entry/2`, `peek` wil only return `{:ok, value}`
   when a timeout is reached whereas `peek_entry` will return `{:ok, entry}`.
@@ -120,7 +123,10 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Returns the next event of the queue with the current system time as `now/0`.
+  Returns the next entry of the queue or a delay in milliseconds before the next
+  value.
+
+  Entry values can be retrieved with `TimeQueue.GbTrees.value/1`.
 
   See `peek_entry/2`.
   """
@@ -129,7 +135,7 @@ defmodule TimeQueue.GbTrees do
     do: peek_entry(tq, now())
 
   @doc """
-  Returns the next event of the queue according to the given current time in
+  Returns the next entry of the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
@@ -142,9 +148,9 @@ defmodule TimeQueue.GbTrees do
 
   ### Example
 
-      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.peek_entry(tq, _now = 20)
-      iex> {:ok, _} = TimeQueue.peek_entry(tq, _now = 100)
+      iex> {:ok, tref, tq} = TimeQueue.GbTrees.new() |> TimeQueue.GbTrees.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.peek_entry(tq, _now = 20)
+      iex> {:ok, _} = TimeQueue.GbTrees.peek_entry(tq, _now = 100)
   """
   @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_entry_return()
   def peek_entry({_, tree}, now) do
@@ -159,7 +165,7 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Extracts the next entry in the queue with the current system time as `now/0`.
+  Extracts the next entry in the queue or returns a delay.
 
   See `pop/2`.
   """
@@ -185,13 +191,12 @@ defmodule TimeQueue.GbTrees do
 
   ### Example
 
-      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.pop(tq, _now = 20)
-      iex> {:ok, value, _} = TimeQueue.pop(tq, _now = 100)
+      iex> {:ok, tref, tq} = TimeQueue.GbTrees.new() |> TimeQueue.GbTrees.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop(tq, _now = 20)
+      iex> {:ok, value, _} = TimeQueue.GbTrees.pop(tq, _now = 100)
       iex> value
       :hello
   """
-
   @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
   def pop(tq, now) do
     case pop_entry(tq, now) do
@@ -201,7 +206,7 @@ defmodule TimeQueue.GbTrees do
   end
 
   @doc """
-  Extracts the next event of the queue with the current system time as `now/0`.
+  Extracts the next entry of the queue with the current system time as `now/0`.
 
   See `pop_entry/2`.
   """
@@ -210,7 +215,7 @@ defmodule TimeQueue.GbTrees do
     do: pop_entry(tq, now())
 
   @doc """
-  Extracts the next event of the queue according to the given current time in
+  Extracts the next entry of the queue according to the given current time in
   milliseconds.
 
   Possible return values are:
@@ -223,9 +228,9 @@ defmodule TimeQueue.GbTrees do
 
   ### Example
 
-      iex> {:ok, tref, tq} = TimeQueue.new() |> TimeQueue.enqueue(100, :hello, _now = 0)
-      iex> {:delay, ^tref, 80} = TimeQueue.pop_entry(tq, _now = 20)
-      iex> {:ok, _, _} = TimeQueue.pop_entry(tq, _now = 100)
+      iex> {:ok, tref, tq} = TimeQueue.GbTrees.new() |> TimeQueue.GbTrees.enqueue(100, :hello, _now = 0)
+      iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop_entry(tq, _now = 20)
+      iex> {:ok, _, _} = TimeQueue.GbTrees.pop_entry(tq, _now = 100)
   """
   @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_entry_return()
   def pop_entry({max_id, tree}, now) do
@@ -308,7 +313,7 @@ defmodule TimeQueue.GbTrees do
 
   See `enqueue/4`.
   """
-  @spec enqueue(t, ttl, any) :: enqueue_return(t)
+  @spec enqueue(t, ttl, any) :: enqueue_return()
   def enqueue(tq, ttl, val),
     do: enqueue(tq, ttl, val, now())
 
@@ -318,7 +323,7 @@ defmodule TimeQueue.GbTrees do
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue(t, ttl, any, now :: integer) :: enqueue_return(t)
+  @spec enqueue(t, ttl, any, now :: integer) :: enqueue_return()
   def enqueue(tq, ttl, val, now_ms)
 
   def enqueue(tq, ttl, val, now) when is_timespec(ttl),
@@ -332,7 +337,7 @@ defmodule TimeQueue.GbTrees do
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue_abs(t, end_time :: integer, value :: any) :: enqueue_return(t)
+  @spec enqueue_abs(t, end_time :: integer, value :: any) :: enqueue_return()
   def enqueue_abs({max_id, tree}, ts, val) do
     new_max_id = bump_max_id(max_id)
     tref = {ts, new_max_id}
@@ -345,11 +350,11 @@ defmodule TimeQueue.GbTrees do
 
   @doc """
   Returns the value of an queue entry.
-      iex> tq = TimeQueue.new()
-      iex> {:ok, _, tq} = TimeQueue.enqueue(tq, 10, :my_value)
+      iex> tq = TimeQueue.GbTrees.new()
+      iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
-      iex> TimeQueue.value(entry)
+      iex> {:ok, entry} = TimeQueue.GbTrees.peek_entry(tq)
+      iex> TimeQueue.GbTrees.value(entry)
       :my_value
   """
   @spec value(entry) :: any
@@ -358,54 +363,15 @@ defmodule TimeQueue.GbTrees do
   @doc """
   Returns the time reference of an queue entry. This reference is
   used as a key to identify a unique entry.
-      iex> tq = TimeQueue.new()
-      iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value)
+      iex> tq = TimeQueue.GbTrees.new()
+      iex> {:ok, tref, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
-      iex> {:ok, entry} = TimeQueue.peek_entry(tq)
-      iex> tref == TimeQueue.tref(entry)
+      iex> {:ok, entry} = TimeQueue.GbTrees.peek_entry(tq)
+      iex> tref == TimeQueue.GbTrees.tref(entry)
       true
   """
   @spec tref(entry) :: any
   def tref(tqrec(tref: tref)), do: tref
-
-  @doc """
-  This function is used internally to determine the current time when it is not
-  given in the arguments to `enqueue/3`, `pop/1`, `pop_entry/1` and `peek_entry/1`.
-
-  It is a simple alias to `:erlang.system_time(:millisecond)`. TimeQueue does
-  not use monotonic time since it already manages its own unique identifiers for
-  queue entries.
-  """
-  @spec now :: integer
-  def now(),
-    do: :erlang.system_time(:millisecond)
-
-  defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
-    do: n
-
-  defp ttl_to_milliseconds({_, _} = ttl) when is_timespec(ttl),
-    do: ttl_to_seconds(ttl) * 1000
-
-  defp ttl_to_seconds({seconds, unit}) when unit in [:second, :seconds],
-    do: seconds
-
-  defp ttl_to_seconds({minutes, unit}) when unit in [:minute, :minutes],
-    do: minutes * 60
-
-  defp ttl_to_seconds({hours, unit}) when unit in [:hour, :hours],
-    do: hours * 60 * 60
-
-  defp ttl_to_seconds({days, unit}) when unit in [:day, :days],
-    do: days * 24 * 60 * 60
-
-  defp ttl_to_seconds({weeks, unit}) when unit in [:week, :weeks],
-    do: weeks * 7 * 24 * 60 * 60
-
-  defp ttl_to_seconds({_, unit}),
-    do: raise("Unknown TTL unit: #{unit}")
-
-  defp timespec_add(ttl, int),
-    do: ttl_to_milliseconds(ttl) + int
 
   def supports_encoding(:etf), do: true
   def supports_encoding(_), do: false
