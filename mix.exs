@@ -1,6 +1,8 @@
 defmodule TimeQueue.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/lud/time_queue"
+
   def project do
     [
       app: :time_queue,
@@ -23,12 +25,13 @@ defmodule TimeQueue.MixProject do
   defp package() do
     [
       description: """
-      TimeQueue is a simple functional timer queue (no processes, no messaging, no erlang timers) based on gb_trees.
+      TimeQueue is a simple functional timer queue (no processes, no messaging,
+      no erlang timers) based on gb_trees.
       """,
       licenses: ["MIT"],
       links: %{
-        "Github" => "https://github.com/lud/time_queue",
-        "CHANGELOG" => "https://github.com/lud/time_queue/blob/master/CHANGELOG.md"
+        "Github" => @source_url,
+        "CHANGELOG" => "#{@source_url}/blob/master/CHANGELOG.md"
       }
     ]
   end
@@ -45,7 +48,11 @@ defmodule TimeQueue.MixProject do
 
   defp docs do
     [
-      main: "TimeQueue"
+      main: "TimeQueue",
+      source_url: @source_url,
+      extras: [
+        "README.md"
+      ]
     ]
   end
 
