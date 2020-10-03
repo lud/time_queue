@@ -26,7 +26,7 @@ defmodule TimeQueue.MixProject do
     [
       description: """
       TimeQueue is a simple functional timer queue (no processes, no messaging,
-      no erlang timers) based on gb_trees.
+      no erlang timers), serializable, based on a single list of maps.
       """,
       licenses: ["MIT"],
       links: %{
