@@ -349,7 +349,7 @@ defmodule TimeQueue.GbTrees do
   defp bump_max_id(@max_int), do: @min_int
 
   @doc """
-  Returns the value of an queue event.
+  Returns the value of a queue event.
       iex> tq = TimeQueue.GbTrees.new()
       iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
       iex> Process.sleep(10)
@@ -361,7 +361,7 @@ defmodule TimeQueue.GbTrees do
   def value(tqrec(val: val)), do: val
 
   @doc """
-  Returns the time reference of an queue event. This reference is
+  Returns the time reference of a queue event. This reference is
   used as a key to identify a unique event.
       iex> tq = TimeQueue.GbTrees.new()
       iex> {:ok, tref, tq} = TimeQueue.GbTrees.enqueue(tq, 10, :my_value)
