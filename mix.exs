@@ -41,6 +41,7 @@ defmodule TimeQueue.MixProject do
       # Dev tools
       {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
       {:credo, "~> 1.3", only: [:dev], runtime: false},
+      {:inch_ex, github: "lud/inch_ex", branch: "fix-elixir-1.12", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:jason, "> 0.0.0", only: [:dev, :test], runtime: false}
     ]

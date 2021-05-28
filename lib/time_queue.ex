@@ -172,9 +172,9 @@ defmodule TimeQueue do
   def pop(tq),
     do: pop(tq, now())
 
-  @doc ~S"""
+  @doc """
   Extracts the next event in the queue according to the given current time in
-  milliseconds. 
+  milliseconds.
 
   Much like `pop_event/2` but the tuple returned when an event time is reached
   (returns with `:ok`) success will only contain the value inserted in the
@@ -213,7 +213,7 @@ defmodule TimeQueue do
   def pop_event(tq),
     do: pop_event(tq, now())
 
-  @doc ~S"""
+  @doc """
   Extracts the next event in the queue according to the given current time in
   milliseconds.
 
@@ -406,6 +406,28 @@ defmodule TimeQueue do
   def pop_entry(tq, now_ms), do: pop_event(tq, now_ms)
 
   @doc """
+  Provides a `GenServer` compatible timeout from the queue.
+
+  Accepts the current time as a second argument or will default to the current
+  system time.
+
+  Returns:
+  * `:infinity` when the queue is empty,
+  * `0` when there is the next event time has been reached or is in the past,
+  * otherwise it returns the delay to the next event.
+  """
+  @spec timeout(t, now_ms :: timestamp_ms) :: non_neg_integer | :infinity
+  def timeout(tq, now_ms \\ now())
+
+  def timeout(tq, now_ms) do
+    case peek(tq, now_ms) do
+      {:delay, _, timeout} -> timeout
+      :empty -> :infinity
+      {:ok, _value} -> 0
+    end
+  end
+
+  @doc """
   This function is used internally to determine the current time when using
   functions `enqueue/3`, `pop/1`, `pop_event/1` and `peek_event/1`.
 
@@ -414,7 +436,7 @@ defmodule TimeQueue do
   queue entries.
   """
   @spec now :: integer
-  def now(),
+  def now,
     do: :erlang.system_time(:millisecond)
 
   @doc false

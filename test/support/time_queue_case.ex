@@ -1,4 +1,8 @@
 defmodule TimeQueueCase do
+  @moduledoc """
+  Implementation of the test suite for different adapters
+  """
+
   defmacro __using__(opts) do
     impl_module = Keyword.fetch!(opts, :module)
 
@@ -69,6 +73,10 @@ defmodule TimeQueueCase do
       test "peek/pop entries or values" do
         @runner.peek_or_pop_entries_or_values(@mod)
       end
+
+      test "return a gen_server compatible timeout" do
+        @runner.check_timeouts(@mod)
+      end
     end
   end
 
@@ -135,8 +143,8 @@ defmodule TimeQueueCase do
     tq_del_tref = mod.delete(tq, tref)
     assert 0 = mod.size(tq_del_tref)
 
-    # deleting a tref that does not exist 
-    # 
+    # deleting a tref that does not exist
+    #
     # As we are testing multiple implementations we will create another
     # queue to get a valid tref
     {:ok, bad_tref, _} = mod.enqueue(mod.new(), {5000, :ms}, :dummy)
@@ -164,28 +172,50 @@ defmodule TimeQueueCase do
     assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 3)
     assert {:ok, _, tq} = mod.enqueue(tq, {500, :ms}, 4)
 
-    assert {:ok, json} = Jason.encode(tq, pretty: true)
+    assert {:ok, _json} = Jason.encode(tq, pretty: true)
   end
 
   def peek_or_pop_entries_or_values(mod) do
     tq = mod.new()
     assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval)
 
-    # # In case of a delay the behaviour was not changed in v0.8
+    # In case of a delay the behaviour was not changed in v0.8
     assert {:delay, ^tref, _delay} = mod.peek(tq)
-    assert {:delay, ^tref, delay} = mod.pop(tq)
+    assert {:delay, ^tref, _delay} = mod.pop(tq)
 
     Process.sleep(500)
 
-    # # But with a succesful return we only get the value
+    # But with a succesful return we only get the value
     assert {:ok, :myval} = mod.peek(tq)
     assert {:ok, :myval, _} = mod.pop(tq)
 
-    # # The old behaviour is available
+    # The old behaviour is available
     assert {:ok, event_peeked} = mod.peek_event(tq)
     assert {:ok, event_poped, _} = mod.pop_event(tq)
     assert :myval = mod.value(event_peeked)
     assert :myval = mod.value(event_poped)
+  end
+
+  def check_timeouts(mod) do
+    # The function must return:
+    # * zero if there is a value, even if it is in the past
+    # * the time in milliseconds if there is a delay
+    # * infinity if the queue is empty
+
+    empty = mod.new()
+    assert mod.timeout(empty) == :infinity
+
+    {:ok, _, tq} = mod.enqueue(mod.new(), 100, :some_val, 0)
+
+    # assert with a delay
+    assert mod.timeout(tq, 80) == 20
+
+    # assert on time
+    assert mod.timeout(tq, 100) == 0
+
+    # assert when the event is in the past
+    assert mod.timeout(tq, 200) == 0
+    assert mod.timeout(tq) == 0
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do
