@@ -6,7 +6,7 @@ defmodule TimeQueue.MixProject do
   def project do
     [
       app: :time_queue,
-      version: "0.9.5",
+      version: "0.9.6",
       elixir: "~> 1.10",
       start_permanent: false,
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -39,10 +39,10 @@ defmodule TimeQueue.MixProject do
   defp deps do
     [
       # Dev tools
-      {:ex_doc, ">= 0.0.0", only: [:dev], runtime: false},
-      {:credo, "~> 1.3", only: [:dev], runtime: false},
+      {:ex_doc, ">= 0.28.0", only: [:dev], runtime: false},
+      {:credo, "~> 1.6", only: [:dev], runtime: false},
       {:inch_ex, github: "lud/inch_ex", branch: "fix-elixir-1.12", only: [:dev], runtime: false},
-      {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.1", only: [:dev], runtime: false},
       {:jason, "> 0.0.0", only: [:dev, :test], runtime: false}
     ]
   end

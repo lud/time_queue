@@ -68,9 +68,7 @@ defmodule TimeQueue.GbTrees do
   # Hopefully in the meantime they will be no tref stored that would match any
   # tref created with the same timestamp and the same ref (very unlikely !).
   # We have to do this though because the time queue must be persistable, so
-  # unique integers must remain unique even if we are restarting the runtime ;
-  # and timestamps can be manually set to any values, for example with small
-  # integers like (1, 2, 3) when modeling a discrete time (in steps).
+  # unique integers must remain unique even if we are restarting the runtime.
   #
   # We use 32b integers to keep low data size when using external term format.
   @min_int -2_147_483_648
@@ -91,9 +89,11 @@ defmodule TimeQueue.GbTrees do
     do: {@min_int, Tree.empty()}
 
   @doc """
-  Returns the numer of entries in the queue.
+  Returns the number of entries in the queue.
   """
   @spec size(t) :: integer
+  def size(tq)
+
   def size({_, tree}),
     do: Tree.size(tree)
 
@@ -114,7 +114,7 @@ defmodule TimeQueue.GbTrees do
   Just like `pop/2` _vs._ `pop_event/2`, `peek` wil only return `{:ok, value}`
   when a timeout is reached whereas `peek_event` will return `{:ok, event}`.
   """
-  @spec peek(t, now_ms :: timestamp_ms) :: peek_return()
+  @spec peek(t, now :: timestamp_ms) :: peek_return()
   def peek(tq, now) do
     case peek_event(tq, now) do
       {:ok, event} -> {:ok, value(event)}
@@ -152,7 +152,9 @@ defmodule TimeQueue.GbTrees do
       iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.peek_event(tq, _now = 20)
       iex> {:ok, _} = TimeQueue.GbTrees.peek_event(tq, _now = 100)
   """
-  @spec peek_event(t, now_ms :: timestamp_ms) :: peek_event_return()
+  @spec peek_event(t, now :: timestamp_ms) :: peek_event_return()
+  def peek_event(tq, now)
+
   def peek_event({_, tree}, now) do
     if Tree.is_empty(tree) do
       :empty
@@ -197,7 +199,7 @@ defmodule TimeQueue.GbTrees do
       iex> value
       :hello
   """
-  @spec pop(t, now_ms :: timestamp_ms) :: pop_return()
+  @spec pop(t, now :: timestamp_ms) :: pop_return()
   def pop(tq, now) do
     case pop_event(tq, now) do
       {:ok, event, tq2} -> {:ok, value(event), tq2}
@@ -232,7 +234,9 @@ defmodule TimeQueue.GbTrees do
       iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop_event(tq, _now = 20)
       iex> {:ok, _, _} = TimeQueue.GbTrees.pop_event(tq, _now = 100)
   """
-  @spec pop_event(t, now_ms :: timestamp_ms) :: pop_event_return()
+  @spec pop_event(t, now :: timestamp_ms) :: pop_event_return()
+  def pop_event(tq, now)
+
   def pop_event({max_id, tree}, now) do
     if Tree.is_empty(tree) do
       :empty
@@ -284,7 +288,9 @@ defmodule TimeQueue.GbTrees do
   convert the tree to and ordered list, filter the list, and convert back to a
   tree.
   """
-  @spec filter(t, (event -> bool)) :: t
+  @spec filter(t, (event -> boolean)) :: t
+  def filter(tq, fun)
+
   def filter({max_id, tree}, fun) do
     tree =
       tree
@@ -303,7 +309,7 @@ defmodule TimeQueue.GbTrees do
 
   This function is slow with `gb_trees`, see `filter/2`.
   """
-  @spec filter_val(t, (any -> bool)) :: t
+  @spec filter_val(t, (any -> boolean)) :: t
   def filter_val(tq, fun) do
     filter(tq, fn {_, v} -> fun.(v) end)
   end
@@ -324,7 +330,7 @@ defmodule TimeQueue.GbTrees do
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
   @spec enqueue(t, ttl, any, now :: integer) :: enqueue_return()
-  def enqueue(tq, ttl, val, now_ms)
+  def enqueue(tq, ttl, val, now)
 
   def enqueue(tq, ttl, val, now) when is_timespec(ttl),
     do: enqueue_abs(tq, timespec_add(ttl, now), val)
@@ -338,6 +344,8 @@ defmodule TimeQueue.GbTrees do
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
   @spec enqueue_abs(t, end_time :: integer, value :: any) :: enqueue_return()
+  def enqueue_abs(tq, ts, val)
+
   def enqueue_abs({max_id, tree}, ts, val) do
     new_max_id = bump_max_id(max_id)
     tref = {ts, new_max_id}
@@ -358,7 +366,10 @@ defmodule TimeQueue.GbTrees do
       :my_value
   """
   @spec value(event) :: any
-  def value(tqrec(val: val)), do: val
+  def value(event)
+
+  def value(tqrec(val: val)),
+    do: val
 
   @doc """
   Returns the time reference of a queue event. This reference is
@@ -371,7 +382,10 @@ defmodule TimeQueue.GbTrees do
       true
   """
   @spec tref(event) :: any
-  def tref(tqrec(tref: tref)), do: tref
+  def tref(event)
+
+  def tref(tqrec(tref: tref)),
+    do: tref
 
   @doc false
   def supports_encoding(:etf), do: true
@@ -389,8 +403,8 @@ defmodule TimeQueue.GbTrees do
   Alias for `peek_event/2`.
   """
   @deprecated "Use peek_event/2 instead"
-  @spec peek_entry(t, now_ms :: timestamp_ms) :: peek_event_return()
-  def peek_entry(tq, now_ms), do: peek_event(tq, now_ms)
+  @spec peek_entry(t, now :: timestamp_ms) :: peek_event_return()
+  def peek_entry(tq, now), do: peek_event(tq, now)
 
   @doc """
   Alias for `pop_event/1`.
@@ -403,8 +417,8 @@ defmodule TimeQueue.GbTrees do
   Alias for `pop_event/2`.
   """
   @deprecated "Use pop_event/2 instead"
-  @spec pop_entry(t, now_ms :: timestamp_ms) :: pop_event_return()
-  def pop_entry(tq, now_ms), do: pop_event(tq, now_ms)
+  @spec pop_entry(t, now :: timestamp_ms) :: pop_event_return()
+  def pop_entry(tq, now), do: pop_event(tq, now)
 
   @doc """
   Provides a `GenServer` compatible timeout from the queue.
@@ -413,15 +427,15 @@ defmodule TimeQueue.GbTrees do
   system time.
 
   Returns:
-  * `:infinity` when the queue is empty,
-  * `0` when there is the next event time has been reached or is in the past,
-  * otherwise it returns the delay to the next event.
+  * `:infinity` when the queue is empty.
+  * `0` when there the next event time has been reached.
+  * The delay to the next event otherwise.
   """
-  @spec timeout(t, now_ms :: timestamp_ms) :: non_neg_integer | :infinity
-  def timeout(tq, now_ms \\ now())
+  @spec timeout(t, now :: timestamp_ms) :: non_neg_integer | :infinity
+  def timeout(tq, now \\ now())
 
-  def timeout(tq, now_ms) do
-    case peek(tq, now_ms) do
+  def timeout(tq, now) do
+    case peek(tq, now) do
       {:delay, _, timeout} -> timeout
       :empty -> :infinity
       {:ok, _value} -> 0
