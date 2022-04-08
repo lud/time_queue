@@ -49,22 +49,9 @@ defmodule TimeQueueCase do
         @runner.timers_are_filterable(@mod)
       end
 
-      # test "Timers are deletable by value" do
-      #   # deleting by value delete all entries whose values are equal
-      #   tq = mod.new()
-      #   {:ok, _, tq} = mod.enqueue(tq, 0, :aaa)
-      #   {:ok, _, tq} = mod.enqueue(tq, 0, :bbb)
-
-      #   assert 2 = mod.size(tq)
-
-      #   tq_no_vs =
-      #     mod.delete_val(tq, :aaa)
-      #     |> IO.inspect(label: "tq_no_vs")
-
-      #   assert 1 = mod.size(tq)
-      #   assert {:ok, last} = mod.pop(tq)
-      #   assert :bbb = mod.value(last)
-      # end
+      test "Timers are deletable by value" do
+        @runner.timers_are_deletable_by_value(@mod)
+      end
 
       test "json encode a queue" do
         if @mod.supports_encoding(:json), do: @runner.json_encode_a_queue(@mod)
@@ -194,6 +181,20 @@ defmodule TimeQueueCase do
     assert {:ok, event_poped, _} = mod.pop_event(tq)
     assert :myval = mod.value(event_peeked)
     assert :myval = mod.value(event_poped)
+  end
+
+  def timers_are_deletable_by_value(mod) do
+    # deleting by value delete all entries whose values are equal
+    tq = mod.new()
+    {:ok, _, tq} = mod.enqueue(tq, 0, :aaa)
+    {:ok, _, tq} = mod.enqueue(tq, 0, :bbb)
+
+    assert 2 == mod.size(tq)
+
+    tq = mod.delete_val(tq, :aaa)
+
+    assert 1 == mod.size(tq)
+    assert {:ok, :bbb, _tq} = mod.pop(tq)
   end
 
   def check_timeouts(mod) do

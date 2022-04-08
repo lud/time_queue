@@ -277,7 +277,7 @@ defmodule TimeQueue.GbTrees do
   """
   @spec delete_val(t, any) :: t
   def delete_val(tq, unwanted) do
-    filter(tq, fn %{v: v} -> v !== unwanted end)
+    filter(tq, fn {_, v} -> v !== unwanted end)
   end
 
   @doc """
