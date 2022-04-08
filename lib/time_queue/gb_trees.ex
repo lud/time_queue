@@ -58,11 +58,6 @@ defmodule TimeQueue.GbTrees do
   @opaque id :: integer
   @opaque event :: record(:tqrec, tref: tref, val: any)
   @type event_value :: any
-  @type pop_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value, t}
-  @type peek_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value}
-  @type peek_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
-  @type pop_event_return() :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
-  @type enqueue_return() :: {:ok, tref, t}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
   # Hopefully in the meantime they will be no tref stored that would match any
@@ -103,7 +98,7 @@ defmodule TimeQueue.GbTrees do
 
   See `peek/2`.
   """
-  @spec peek(t) :: peek_return()
+  @spec peek(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value}
   def peek(tq),
     do: peek(tq, now())
 
@@ -114,7 +109,8 @@ defmodule TimeQueue.GbTrees do
   Just like `pop/2` _vs._ `pop_event/2`, `peek` wil only return `{:ok, value}`
   when a timeout is reached whereas `peek_event` will return `{:ok, event}`.
   """
-  @spec peek(t, now :: timestamp_ms) :: peek_return()
+  @spec peek(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value}
   def peek(tq, now) do
     case peek_event(tq, now) do
       {:ok, event} -> {:ok, value(event)}
@@ -130,7 +126,7 @@ defmodule TimeQueue.GbTrees do
 
   See `peek_event/2`.
   """
-  @spec peek_event(t) :: peek_event_return()
+  @spec peek_event(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
   def peek_event(tq),
     do: peek_event(tq, now())
 
@@ -152,7 +148,8 @@ defmodule TimeQueue.GbTrees do
       iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.peek_event(tq, _now = 20)
       iex> {:ok, _} = TimeQueue.GbTrees.peek_event(tq, _now = 100)
   """
-  @spec peek_event(t, now :: timestamp_ms) :: peek_event_return()
+  @spec peek_event(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
   def peek_event(tq, now)
 
   def peek_event({_, tree}, now) do
@@ -171,7 +168,7 @@ defmodule TimeQueue.GbTrees do
 
   See `pop/2`.
   """
-  @spec pop(t) :: pop_return()
+  @spec pop(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value, t}
   def pop(tq),
     do: pop(tq, now())
 
@@ -199,7 +196,8 @@ defmodule TimeQueue.GbTrees do
       iex> value
       :hello
   """
-  @spec pop(t, now :: timestamp_ms) :: pop_return()
+  @spec pop(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event_value, t}
   def pop(tq, now) do
     case pop_event(tq, now) do
       {:ok, event, tq2} -> {:ok, value(event), tq2}
@@ -212,7 +210,7 @@ defmodule TimeQueue.GbTrees do
 
   See `pop_event/2`.
   """
-  @spec pop_event(t) :: pop_event_return()
+  @spec pop_event(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   def pop_event(tq),
     do: pop_event(tq, now())
 
@@ -234,7 +232,8 @@ defmodule TimeQueue.GbTrees do
       iex> {:delay, ^tref, 80} = TimeQueue.GbTrees.pop_event(tq, _now = 20)
       iex> {:ok, _, _} = TimeQueue.GbTrees.pop_event(tq, _now = 100)
   """
-  @spec pop_event(t, now :: timestamp_ms) :: pop_event_return()
+  @spec pop_event(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   def pop_event(tq, now)
 
   def pop_event({max_id, tree}, now) do
@@ -319,7 +318,7 @@ defmodule TimeQueue.GbTrees do
 
   See `enqueue/4`.
   """
-  @spec enqueue(t, ttl, any) :: enqueue_return()
+  @spec enqueue(t, ttl, any) :: {:ok, tref, t}
   def enqueue(tq, ttl, val),
     do: enqueue(tq, ttl, val, now())
 
@@ -329,7 +328,7 @@ defmodule TimeQueue.GbTrees do
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue(t, ttl, any, now :: integer) :: enqueue_return()
+  @spec enqueue(t, ttl, any, now :: integer) :: {:ok, tref, t}
   def enqueue(tq, ttl, val, now)
 
   def enqueue(tq, ttl, val, now) when is_timespec(ttl),
@@ -343,7 +342,7 @@ defmodule TimeQueue.GbTrees do
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
   """
-  @spec enqueue_abs(t, end_time :: integer, value :: any) :: enqueue_return()
+  @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
   def enqueue_abs(tq, ts, val)
 
   def enqueue_abs({max_id, tree}, ts, val) do
@@ -396,28 +395,30 @@ defmodule TimeQueue.GbTrees do
   Alias for `peek_event/1`.
   """
   @deprecated "Use peek_event/1 instead"
-  @spec peek_entry(t) :: peek_event_return()
+  @spec peek_entry(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
   def peek_entry(tq), do: peek_event(tq)
 
   @doc """
   Alias for `peek_event/2`.
   """
   @deprecated "Use peek_event/2 instead"
-  @spec peek_entry(t, now :: timestamp_ms) :: peek_event_return()
+  @spec peek_entry(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
   def peek_entry(tq, now), do: peek_event(tq, now)
 
   @doc """
   Alias for `pop_event/1`.
   """
   @deprecated "Use pop_event/1 instead"
-  @spec pop_entry(t) :: pop_event_return()
+  @spec pop_entry(t) :: :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   def pop_entry(tq), do: pop_event(tq)
 
   @doc """
   Alias for `pop_event/2`.
   """
   @deprecated "Use pop_event/2 instead"
-  @spec pop_entry(t, now :: timestamp_ms) :: pop_event_return()
+  @spec pop_entry(t, now :: timestamp_ms) ::
+          :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   def pop_entry(tq, now), do: pop_event(tq, now)
 
   @doc """

@@ -25,6 +25,7 @@ defmodule TimeQueueCase do
         @runner.insert_pop_many(@mod, 100)
         @runner.insert_pop_many(@mod, 1000)
         @runner.insert_pop_many(@mod, 10_000)
+        @runner.insert_pop_many(@mod, 100_000)
       end
 
       # Some bad test to check that performance is not degrading
