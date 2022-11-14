@@ -25,7 +25,6 @@ defmodule TimeQueueCase do
         @runner.insert_pop_many(@mod, 100)
         @runner.insert_pop_many(@mod, 1000)
         @runner.insert_pop_many(@mod, 10_000)
-        @runner.insert_pop_many(@mod, 100_000)
       end
 
       # Some bad test to check that performance is not degrading
@@ -206,17 +205,22 @@ defmodule TimeQueueCase do
 
     empty = mod.new()
     assert mod.timeout(empty) == :infinity
+    assert mod.timeout(empty, :hibernate) == :hibernate
+    assert mod.timeout(empty, :any_atom) == :any_atom
 
     {:ok, _, tq} = mod.enqueue(mod.new(), 100, :some_val, 0)
 
     # assert with a delay
     assert mod.timeout(tq, 80) == 20
+    assert mod.timeout(tq, :infinity, 80) == 20
 
     # assert on time
     assert mod.timeout(tq, 100) == 0
+    assert mod.timeout(tq, :infinity, 100) == 0
 
     # assert when the event is in the past
-    assert mod.timeout(tq, 200) == 0
+    assert mod.timeout(tq, :infinity, 200) == 0
+    assert mod.timeout(tq, :infinity) == 0
     assert mod.timeout(tq) == 0
   end
 

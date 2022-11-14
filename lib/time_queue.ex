@@ -415,23 +415,69 @@ defmodule TimeQueue do
   def pop_entry(tq, now), do: pop_event(tq, now)
 
   @doc """
-  Provides a `GenServer` compatible timeout from the queue.
+  Returns the time to next event.
 
-  Accepts the current time as a second argument or will default to the current
+  Same as `timeout(tq, :infinity, now())`. See `timeout/3`.
+  """
+  def timeout(tq) do
+    timeout(tq, :infinity, now())
+  end
+
+  @doc """
+  Returns the time to next event.
+
+  Accepts either the current time or an atom to return when the queue is empty.
+
+  * If an integer is given, it will has the same result as `timeout(tq, :infinity, integer)`.
+  * If an atom is given, it will has the same result as `timeout(tq, atom, now())`.
+
+  See `timeout/3`.
+  """
+  def timeout(tq, now) when is_integer(now) do
+    timeout(tq, :infinity, now)
+  end
+
+  def timeout(tq, if_empty) when is_atom(if_empty) do
+    timeout(tq, if_empty, now())
+  end
+
+  @doc """
+  Provides a `GenServer` compatible timeout from the queue, giving the time to
+  the next event.
+
+  Accepts the current time as a third argument or will default to the current
   system time.
 
   Returns:
-  * `:infinity` when the queue is empty.
+  * `if_empty` when the queue is empty. A common value in that case is either
+    `:infinity` or `:hibernate`.
   * `0` when there the next event time has been reached.
   * The delay to the next event otherwise.
-  """
-  @spec timeout(t, now :: timestamp_ms) :: non_neg_integer | :infinity
-  def timeout(tq, now \\ now())
 
-  def timeout(tq, now) do
+  For instance, when used in a `GenServer`, this function can tell when to
+  automatically wakeup the process.
+
+      def handle_call(request, _from, state) do
+        state = do_stuff(state, request)
+        timeout = TimeQueue.timeout(state.time_queue)
+        {:reply, :ok, state, timeout}
+      end
+
+    By default, `timeout/1` and `timeout/2` (if called with an integer for the
+    current time) will return `:infinity`  if the queue if empty. But you may
+    pass `:hibernate` as the second argument for `timeout/2` or `timeout/3` to
+    return `:hibernate` instead.
+
+    Note that any other atom than `:infinity` or `:hibernate` will be returned
+    as-is if as well if the queue is empty.
+  """
+  @spec timeout(t, :infinity | :hibernate | atom, now :: timestamp_ms) ::
+          non_neg_integer | :infinity | :hibernate | atom
+
+  def timeout(tq, if_empty, now) when is_atom(if_empty) and is_integer(now) do
     case peek(tq, now) do
       {:delay, _, timeout} -> timeout
-      :empty -> :infinity
+      :empty -> if_empty
       {:ok, _value} -> 0
     end
   end
