@@ -99,9 +99,16 @@ defmodule TimeQueue.TimeInterval do
 
   @str_parts [{"d", @day}, {"h", @hour}, {"m", @minute}, {"s", @second}]
 
+  @str_parts_verbose [
+    {"day", "days", @day},
+    {"hour", "hours", @hour},
+    {"minute", "minutes", @minute},
+    {"second", "seconds", @second}
+  ]
+
   def to_string(ms) when is_integer(ms) do
     Enum.reduce(@str_parts, {[], ms}, fn {unit, val_of_unit}, {io, ms} ->
-      if ms > val_of_unit do
+      if ms >= val_of_unit do
         {n, rest} = divrem(ms, val_of_unit)
         {[io, Integer.to_string(n), unit], rest}
       else
@@ -110,6 +117,36 @@ defmodule TimeQueue.TimeInterval do
     end)
     |> case do
       {[], ms} -> "#{ms}ms"
+      {str, _} -> :erlang.iolist_to_binary(str)
+    end
+  end
+
+  def to_string(ms, :verbose) when is_integer(ms) do
+    Enum.reduce(@str_parts_verbose, {[], ms}, fn {singular, plural, val_of_unit}, {io, ms} ->
+      if ms >= val_of_unit do
+        {n, rest} = divrem(ms, val_of_unit)
+
+        name =
+          case n do
+            1 -> singular
+            _ -> plural
+          end
+
+        padding =
+          case {rest, val_of_unit} do
+            {_, @second} -> []
+            {0, _} -> []
+            _ -> " "
+          end
+
+        {[io, Integer.to_string(n), " ", name, padding], rest}
+      else
+        {io, ms}
+      end
+    end)
+    |> case do
+      {[], 1} -> "1 millisecond"
+      {[], ms} -> "#{ms} milliseconds"
       {str, _} -> :erlang.iolist_to_binary(str)
     end
   end
