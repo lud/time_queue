@@ -44,7 +44,8 @@ defmodule TimeQueue.MixProject do
       {:credo, "~> 1.6", only: [:dev], runtime: false},
       {:inch_ex, "~> 2.0", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.1", only: [:dev, :test], runtime: false},
-      {:jason, "> 0.0.0", only: [:dev, :test], runtime: false}
+      {:jason, "> 0.0.0", only: [:dev, :test], runtime: false},
+      {:mix_version, "~> 2.1", only: [:dev, :test], runtime: false}
     ]
   end
 
