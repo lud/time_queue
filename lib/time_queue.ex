@@ -383,37 +383,6 @@ defmodule TimeQueue do
   def supports_encoding(:etf), do: true
   def supports_encoding(_), do: false
 
-  # OLD Names functions
-  @doc """
-  Alias for `peek_event/1`.
-  """
-  @deprecated "Use peek_event/1 instead"
-  @spec peek_entry(t) :: :empty | {:delay, tref, non_neg_integer} | {:ok, event}
-  def peek_entry(tq), do: peek_event(tq)
-
-  @doc """
-  Alias for `peek_event/2`.
-  """
-  @deprecated "Use peek_event/2 instead"
-  @spec peek_entry(t, now :: timestamp_ms) ::
-          :empty | {:delay, tref, non_neg_integer} | {:ok, event}
-  def peek_entry(tq, now), do: peek_event(tq, now)
-
-  @doc """
-  Alias for `pop_event/1`.
-  """
-  @deprecated "Use pop_event/1 instead"
-  @spec pop_entry(t) :: :empty | {:delay, tref, non_neg_integer} | {:ok, event, t}
-  def pop_entry(tq), do: pop_event(tq)
-
-  @doc """
-  Alias for `pop_event/2`.
-  """
-  @deprecated "Use pop_event/2 instead"
-  @spec pop_entry(t, now :: timestamp_ms) ::
-          :empty | {:delay, tref, non_neg_integer} | {:ok, event, t}
-  def pop_entry(tq, now), do: pop_event(tq, now)
-
   @doc """
   Returns the time to next event.
 
