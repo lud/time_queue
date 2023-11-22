@@ -371,6 +371,20 @@ defmodule TimeQueue.GbTrees do
     do: val
 
   @doc """
+  Returns the absolute timestamp a queue event is scheduled for.
+      iex> tq = TimeQueue.GbTrees.new()
+      iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue_abs(tq, 1234, :my_value)
+      iex> {:ok, event} = TimeQueue.GbTrees.peek_event(tq)
+      iex> TimeQueue.GbTrees.timestamp(event)
+      1234
+  """
+  @spec timestamp(event) :: pos_integer()
+  def timestamp(event)
+
+  def timestamp(tqrec(tref: {ts, _})),
+    do: ts
+
+  @doc """
   Returns the time reference of a queue event. This reference is
   used as a key to identify a unique event.
       iex> tq = TimeQueue.GbTrees.new()

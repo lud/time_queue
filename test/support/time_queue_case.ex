@@ -181,6 +181,15 @@ defmodule TimeQueueCase do
     assert {:ok, event_poped, _} = mod.pop_event(tq)
     assert :myval = mod.value(event_peeked)
     assert :myval = mod.value(event_poped)
+
+    # It is possible to get the scheduled timestamp of an event
+
+    tq = mod.new()
+    assert {:ok, _tref, tq} = mod.enqueue_abs(tq, 12345, :myval)
+    assert {:ok, event_peeked} = mod.peek_event(tq)
+    assert {:ok, event_poped, _} = mod.pop_event(tq)
+    assert 12345 = mod.timestamp(event_peeked)
+    assert 12345 = mod.timestamp(event_poped)
   end
 
   def timers_are_deletable_by_value(mod) do

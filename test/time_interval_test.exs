@@ -1,7 +1,10 @@
 defmodule TimeQueue.TimeIntervalTest do
-  use ExUnit.Case, async: true
-  import TimeQueue.TimeInterval
+  alias TimeQueue.TimeInterval
   import Kernel, except: [to_string: 1]
+  import TimeQueue.TimeInterval
+  use ExUnit.Case, async: true
+
+  doctest TimeQueue.TimeInterval
 
   test "parsing the intervals" do
     assert 0 == to_ms!("0s")
@@ -26,6 +29,14 @@ defmodule TimeQueue.TimeIntervalTest do
     # the order does not count
 
     assert to_ms!("1d1h1m1s") == to_ms!("1s1m1h1d")
+
+    # duplicate units are cumulative
+    assert to_ms!("2d") == to_ms!("1d1d")
+    assert to_ms!("2d2h") == to_ms!("1d1d1h1h")
+    assert to_ms!("2d2h") == to_ms!("1d1h1d1h")
+
+    # parsing a negative interval
+    assert -1 * to_ms!("1d1h1m1s") == to_ms!("-1d1h1m1s")
   end
 
   test "interval to string" do

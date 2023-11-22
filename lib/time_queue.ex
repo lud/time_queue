@@ -363,6 +363,20 @@ defmodule TimeQueue do
     do: val
 
   @doc """
+  Returns the absolute timestamp a queue event is scheduled for.
+      iex> tq = TimeQueue.new()
+      iex> {:ok, _, tq} = TimeQueue.enqueue_abs(tq, 1234, :my_value)
+      iex> {:ok, event} = TimeQueue.peek_event(tq)
+      iex> TimeQueue.timestamp(event)
+      1234
+  """
+  @spec timestamp(event) :: pos_integer()
+  def timestamp(event)
+
+  def timestamp(%{k: %{t: ts}}),
+    do: ts
+
+  @doc """
   Returns the time reference of a queue event. This reference is
   used as a key to identify a unique event.
       iex> tq = TimeQueue.new()
