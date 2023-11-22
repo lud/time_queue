@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2023-11-22
+
+### Features
+
+- Added the timestamp/1 function that returns the absolute time of an event
+
 ## [1.1.0] - 2023-11-22
 
 ### Miscellaneous Tasks
