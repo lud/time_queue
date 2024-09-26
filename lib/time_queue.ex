@@ -481,7 +481,7 @@ defmodule TimeQueue do
   def timespec_add(ttl, int),
     do: ttl_to_milliseconds(ttl) + int
 
-  defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n > 0,
+  defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n >= 0,
     do: n
 
   defp ttl_to_milliseconds({_, _} = ttl) when is_timespec(ttl),
@@ -503,5 +503,5 @@ defmodule TimeQueue do
     do: weeks * 7 * 24 * 60 * 60
 
   defp ttl_to_seconds({_, unit}),
-    do: raise("Unknown TTL unit: #{unit}")
+    do: raise(ArgumentError, "unknown TTL unit: #{unit}")
 end

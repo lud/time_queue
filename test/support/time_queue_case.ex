@@ -64,6 +64,10 @@ defmodule TimeQueueCase do
       test "return a gen_server compatible timeout" do
         @runner.check_timeouts(@mod)
       end
+
+      test "enqueue with same time is FIFO" do
+        @runner.check_fifo(@mod)
+      end
     end
   end
 
@@ -185,11 +189,11 @@ defmodule TimeQueueCase do
     # It is possible to get the scheduled timestamp of an event
 
     tq = mod.new()
-    assert {:ok, _tref, tq} = mod.enqueue_abs(tq, 12345, :myval)
+    assert {:ok, _tref, tq} = mod.enqueue_abs(tq, 12_345, :myval)
     assert {:ok, event_peeked} = mod.peek_event(tq)
     assert {:ok, event_poped, _} = mod.pop_event(tq)
-    assert 12345 = mod.timestamp(event_peeked)
-    assert 12345 = mod.timestamp(event_poped)
+    assert 12_345 = mod.timestamp(event_peeked)
+    assert 12_345 = mod.timestamp(event_poped)
   end
 
   def timers_are_deletable_by_value(mod) do
@@ -231,6 +235,15 @@ defmodule TimeQueueCase do
     assert mod.timeout(tq, :infinity, 200) == 0
     assert mod.timeout(tq, :infinity) == 0
     assert mod.timeout(tq) == 0
+  end
+
+  def check_fifo(mod) do
+    tq = mod.new()
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, 1)
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, 2)
+
+    assert {:ok, 1, tq} = mod.pop(tq)
+    assert {:ok, 2, _} = mod.pop(tq)
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do
