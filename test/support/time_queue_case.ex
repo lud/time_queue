@@ -68,6 +68,10 @@ defmodule TimeQueueCase do
       test "enqueue with same time is FIFO" do
         @runner.check_fifo(@mod)
       end
+
+      test "stream" do
+        @runner.convert_to_stream(@mod)
+      end
     end
   end
 
@@ -239,11 +243,35 @@ defmodule TimeQueueCase do
 
   def check_fifo(mod) do
     tq = mod.new()
-    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, 1)
-    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, 2)
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, :hello, 0)
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, :world, 0)
+    assert {:ok, :hello, tq} = mod.pop(tq)
+    assert {:ok, :world, _} = mod.pop(tq)
 
-    assert {:ok, 1, tq} = mod.pop(tq)
-    assert {:ok, 2, _} = mod.pop(tq)
+    # different time spec
+    tq = mod.new()
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :second}, :hello, 0)
+    assert {:ok, _, tq} = mod.enqueue(tq, {0, :ms}, :world, 0)
+    assert {:ok, _, tq} = mod.enqueue(tq, 0, :!, 0)
+    assert {:ok, :hello, tq} = mod.pop(tq)
+    assert {:ok, :world, tq} = mod.pop(tq)
+    assert {:ok, :!, _} = mod.pop(tq)
+  end
+
+  def convert_to_stream(mod) do
+    tq = mod.new()
+    assert {:ok, _, tq} = mod.enqueue(tq, {4, :ms}, 4)
+    assert {:ok, _, tq} = mod.enqueue(tq, {1, :ms}, 1)
+    assert {:ok, _, tq} = mod.enqueue(tq, {3, :ms}, 3)
+    assert {:ok, _, tq} = mod.enqueue(tq, {2, :ms}, 2)
+
+    assert [10, 20, 30, 40] =
+             tq
+             |> mod.stream()
+             |> Stream.map(&(mod.value(&1) * 10))
+             |> Enum.to_list()
+
+    assert [] = Enum.to_list(mod.stream(mod.new()))
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do

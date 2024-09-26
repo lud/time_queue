@@ -466,6 +466,18 @@ defmodule TimeQueue do
   end
 
   @doc """
+  Returns a stream of all the events in the queue.
+
+  Note that this stream is immediate and does not wait for events.
+  """
+  @spec stream(t) :: Enumerable.t()
+  def stream(tq) do
+    # Stream is used for compatibility with gb_trees, but here we are just
+    # returning the list of events.
+    tq.q
+  end
+
+  @doc """
   This function is used internally to determine the current time when using
   functions `enqueue/3`, `pop/1`, `pop_event/1` and `peek_event/1`.
 

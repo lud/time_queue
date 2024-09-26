@@ -18,9 +18,10 @@ defmodule TimeQueue.GbTrees do
   for expired timers.
   """
   require Record
-  alias :gb_trees, as: Tree
 
   Record.defrecordp(:tqrec, tref: nil, val: nil)
+
+  @empty_tree :gb_trees.empty()
 
   @timespec_units [
     # :millisecond, # no single millisecond
@@ -50,7 +51,7 @@ defmodule TimeQueue.GbTrees do
           | :week
           | :weeks
 
-  @opaque t :: {id, Tree.tree(tref, any)}
+  @opaque t :: {id, :gb_trees.tree(tref, any)}
   @type timespec :: {pos_integer, timespec_unit}
   @type ttl :: timespec | integer
   @type timestamp_ms :: pos_integer
@@ -81,7 +82,7 @@ defmodule TimeQueue.GbTrees do
   """
   @spec new :: t
   def new,
-    do: {@min_int, Tree.empty()}
+    do: {@min_int, :gb_trees.empty()}
 
   @doc """
   Returns the number of entries in the queue.
@@ -90,7 +91,7 @@ defmodule TimeQueue.GbTrees do
   def size(tq)
 
   def size({_, tree}),
-    do: Tree.size(tree)
+    do: :gb_trees.size(tree)
 
   @doc """
   Returns the next value of the queue or a delay in milliseconds before the next
@@ -152,14 +153,14 @@ defmodule TimeQueue.GbTrees do
           :empty | {:delay, tref(), non_neg_integer} | {:ok, event}
   def peek_event(tq, now)
 
+  def peek_event({_, @empty_tree}, _) do
+    :empty
+  end
+
   def peek_event({_, tree}, now) do
-    if Tree.is_empty(tree) do
-      :empty
-    else
-      case Tree.smallest(tree) do
-        {{ts, _} = tref, val} when ts <= now -> {:ok, tqrec(tref: tref, val: val)}
-        {{ts, _} = tref, _} -> {:delay, tref, ts - now}
-      end
+    case :gb_trees.smallest(tree) do
+      {{ts, _} = tref, val} when ts <= now -> {:ok, tqrec(tref: tref, val: val)}
+      {{ts, _} = tref, _} -> {:delay, tref, ts - now}
     end
   end
 
@@ -236,18 +237,18 @@ defmodule TimeQueue.GbTrees do
           :empty | {:delay, tref(), non_neg_integer} | {:ok, event, t}
   def pop_event(tq, now)
 
-  def pop_event({max_id, tree}, now) do
-    if Tree.is_empty(tree) do
-      :empty
-    else
-      case Tree.smallest(tree) do
-        {{ts, _}, _} when ts <= now ->
-          {tref, val, tree2} = Tree.take_smallest(tree)
-          {:ok, tqrec(tref: tref, val: val), {max_id, tree2}}
+  def pop_event({_, @empty_tree}, _) do
+    :empty
+  end
 
-        {{ts, _} = tref, _} ->
-          {:delay, tref, ts - now}
-      end
+  def pop_event({max_id, tree}, now) do
+    case :gb_trees.smallest(tree) do
+      {{ts, _}, _} when ts <= now ->
+        {tref, val, tree2} = :gb_trees.take_smallest(tree)
+        {:ok, tqrec(tref: tref, val: val), {max_id, tree2}}
+
+      {{ts, _} = tref, _} ->
+        {:delay, tref, ts - now}
     end
   end
 
@@ -267,7 +268,7 @@ defmodule TimeQueue.GbTrees do
     do: delete(tq, tref)
 
   def delete({max_id, tree}, {_, _} = tref),
-    do: {max_id, Tree.delete_any(tref, tree)}
+    do: {max_id, :gb_trees.delete_any(tref, tree)}
 
   @doc """
   Deletes all entries from the queue whose values are equal to `unwanted`.
@@ -293,9 +294,9 @@ defmodule TimeQueue.GbTrees do
   def filter({max_id, tree}, fun) do
     tree =
       tree
-      |> Tree.to_list()
+      |> :gb_trees.to_list()
       |> Enum.filter(fun)
-      |> Tree.from_orddict()
+      |> :gb_trees.from_orddict()
 
     {max_id, tree}
   end
@@ -348,7 +349,7 @@ defmodule TimeQueue.GbTrees do
   def enqueue_abs({max_id, tree}, ts, val) do
     new_max_id = bump_max_id(max_id)
     tref = {ts, new_max_id}
-    tree = Tree.insert(tref, val, tree)
+    tree = :gb_trees.insert(tref, val, tree)
     {:ok, tref, {new_max_id, tree}}
   end
 
@@ -411,6 +412,23 @@ defmodule TimeQueue.GbTrees do
   """
   def timeout(tq) do
     timeout(tq, :infinity, now())
+  end
+
+  @doc """
+  Returns a stream of all the events in the queue.
+
+  Note that this stream is immediate and does not wait for events.
+  """
+  @spec stream(t) :: Enumerable.t()
+  def stream({_, tree}) do
+    Stream.unfold(tree, fn
+      {0, nil} ->
+        nil
+
+      tree ->
+        {tref, val, tree} = :gb_trees.take_smallest(tree)
+        {tqrec(tref: tref, val: val), tree}
+    end)
   end
 
   @doc """
