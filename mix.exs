@@ -13,7 +13,8 @@ defmodule TimeQueue.MixProject do
       deps: deps(),
       docs: docs(),
       versioning: versioning(),
-      package: package()
+      package: package(),
+      dialyzer: dialyzer()
     ]
   end
 
@@ -78,4 +79,12 @@ defmodule TimeQueue.MixProject do
 
   defp elixirc_paths(:test), do: ["lib", "test/support"]
   defp elixirc_paths(_), do: ["lib"]
+
+  defp dialyzer do
+    [
+      flags: [:unmatched_returns, :error_handling, :unknown, :extra_return],
+      list_unused_filters: true,
+      plt_local_path: "_build/plts"
+    ]
+  end
 end
