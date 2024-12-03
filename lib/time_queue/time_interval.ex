@@ -185,13 +185,6 @@ defmodule TimeQueue.TimeInterval do
   @doc false
   def second(n), do: seconds(n)
 
-  @str_parts_verbose [
-    {"day", "days", @day},
-    {"hour", "hours", @hour},
-    {"minute", "minutes", @minute},
-    {"second", "seconds", @second}
-  ]
-
   @doc """
   Returns the string representation of the given time interval. Note that as
   this module is intended to work with long durations, the number of remaining
@@ -223,40 +216,44 @@ defmodule TimeQueue.TimeInterval do
     __MODULE__.to_string(ms)
   end
 
-  def to_string(ms) when is_integer(ms) do
-    ms |> int_to_string(:noskip) |> :erlang.iolist_to_binary()
+  def to_string(ms) when ms < 1000 do
+    "#{ms}ms"
   end
 
-  defp int_to_string(ms, :noskip) when ms < 1000, do: [Integer.to_string(ms), "ms"]
-  defp int_to_string(ms, :skip) when ms < 1000, do: []
+  def to_string(ms) when is_integer(ms) do
+    ms |> int_to_string() |> :erlang.iolist_to_binary()
+  end
 
-  defp int_to_string(ms, _) when ms >= @day do
+  defp int_to_string(ms) when ms >= @day do
     days = div(ms, @day)
     ms = rem(ms, @day)
 
-    [Integer.to_string(days), "d" | int_to_string(ms, :skip)]
+    [Integer.to_string(days), "d" | int_to_string(ms)]
   end
 
-  defp int_to_string(ms, _) when ms >= @hour do
+  defp int_to_string(ms) when ms >= @hour do
     hours = div(ms, @hour)
     ms = rem(ms, @hour)
 
-    [Integer.to_string(hours), "h" | int_to_string(ms, :skip)]
+    [Integer.to_string(hours), "h" | int_to_string(ms)]
   end
 
-  defp int_to_string(ms, _) when ms >= @minute do
+  defp int_to_string(ms) when ms >= @minute do
     minutes = div(ms, @minute)
     ms = rem(ms, @minute)
 
-    [Integer.to_string(minutes), "m" | int_to_string(ms, :skip)]
+    [Integer.to_string(minutes), "m" | int_to_string(ms)]
   end
 
-  defp int_to_string(ms, _) when ms >= @second do
+  defp int_to_string(ms) when ms >= @second do
     seconds = div(ms, @second)
 
     # discard remaining ms
-
     [Integer.to_string(seconds), "s"]
+  end
+
+  defp int_to_string(_) do
+    []
   end
 
   @doc """
@@ -274,37 +271,53 @@ defmodule TimeQueue.TimeInterval do
     __MODULE__.to_string(ms, :verbose)
   end
 
+  def to_string(1, :verbose) do
+    "1 millisecond"
+  end
+
+  def to_string(ms, :verbose) when ms < 1000 do
+    "#{ms} milliseconds"
+  end
+
   def to_string(ms, :verbose) when is_integer(ms) do
-    Enum.reduce(@str_parts_verbose, {[], ms}, fn {singular, plural, val_of_unit}, {io, ms} ->
-      if ms >= val_of_unit do
-        {n, rest} = divrem(ms, val_of_unit)
-
-        name =
-          case n do
-            1 -> singular
-            _ -> plural
-          end
-
-        padding =
-          case {rest, val_of_unit} do
-            {_, @second} -> []
-            {0, _} -> []
-            _ -> " "
-          end
-
-        {[io, Integer.to_string(n), " ", name, padding], rest}
-      else
-        {io, ms}
-      end
-    end)
-    |> case do
-      {[], 1} -> "1 millisecond"
-      {[], ms} -> "#{ms} milliseconds"
-      {str, _} -> :erlang.iolist_to_binary(str)
-    end
+    ms |> int_to_verbose() |> :erlang.iolist_to_binary()
   end
 
-  defp divrem(num, d) do
-    {div(num, d), rem(num, d)}
+  defp int_to_verbose(ms) when ms >= @day do
+    days = div(ms, @day)
+    ms = rem(ms, @day)
+
+    [Integer.to_string(days), " day", plural_space(days, ms) | int_to_verbose(ms)]
   end
+
+  defp int_to_verbose(ms) when ms >= @hour do
+    hours = div(ms, @hour)
+    ms = rem(ms, @hour)
+
+    [Integer.to_string(hours), " hour", plural_space(hours, ms) | int_to_verbose(ms)]
+  end
+
+  defp int_to_verbose(ms) when ms >= @minute do
+    minutes = div(ms, @minute)
+    ms = rem(ms, @minute)
+
+    [Integer.to_string(minutes), " minute", plural_space(minutes, ms) | int_to_verbose(ms)]
+  end
+
+  defp int_to_verbose(ms) when ms >= @second do
+    seconds = div(ms, @second)
+
+    # discard remaining ms
+
+    [Integer.to_string(seconds), " second", plural(seconds)]
+  end
+
+  defp int_to_verbose(_) do
+    []
+  end
+
+  defp plural_space(n, 0), do: plural(n)
+  defp plural_space(n, _), do: [plural(n), " "]
+  defp plural(1), do: ""
+  defp plural(_), do: "s"
 end
