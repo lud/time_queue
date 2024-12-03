@@ -49,6 +49,12 @@ defmodule TimeQueue.TimeInterval do
   @re_all_intervals ~r/^(([0-9]+)(d|h|m|s))+$/
   @re_interval ~r/([0-9]+)(d|h|m|s)+/
 
+  @ms 1
+  @second 1000 * @ms
+  @minute 60 * @second
+  @hour 60 * @minute
+  @day 24 * @hour
+
   @doc """
   Returns a `%#{inspect(__MODULE__)}{}` struct from a time interval string.
 
@@ -161,12 +167,6 @@ defmodule TimeQueue.TimeInterval do
   defp calc_interval(v, "m"), do: minutes(v)
   defp calc_interval(v, "s"), do: seconds(v)
 
-  @ms 1
-  @second 1000 * @ms
-  @minute 60 * @second
-  @hour 60 * @minute
-  @day 24 * @hour
-
   @doc "Returns the number of milliseconds in `n` days."
   def days(n), do: n * @day
   @doc "Returns the number of milliseconds in `n` hours. Alias for `:timer.hours/1`."
@@ -184,8 +184,6 @@ defmodule TimeQueue.TimeInterval do
   def minute(n), do: minutes(n)
   @doc false
   def second(n), do: seconds(n)
-
-  @str_parts [{"d", @day}, {"h", @hour}, {"m", @minute}, {"s", @second}]
 
   @str_parts_verbose [
     {"day", "days", @day},
@@ -226,18 +224,39 @@ defmodule TimeQueue.TimeInterval do
   end
 
   def to_string(ms) when is_integer(ms) do
-    Enum.reduce(@str_parts, {[], ms}, fn {unit, val_of_unit}, {io, ms} ->
-      if ms >= val_of_unit do
-        {n, rest} = divrem(ms, val_of_unit)
-        {[io, Integer.to_string(n), unit], rest}
-      else
-        {io, ms}
-      end
-    end)
-    |> case do
-      {[], ms} -> "#{ms}ms"
-      {str, _} -> :erlang.iolist_to_binary(str)
-    end
+    ms |> int_to_string(:noskip) |> :erlang.iolist_to_binary()
+  end
+
+  defp int_to_string(ms, :noskip) when ms < 1000, do: [Integer.to_string(ms), "ms"]
+  defp int_to_string(ms, :skip) when ms < 1000, do: []
+
+  defp int_to_string(ms, _) when ms >= @day do
+    days = div(ms, @day)
+    ms = rem(ms, @day)
+
+    [Integer.to_string(days), "d" | int_to_string(ms, :skip)]
+  end
+
+  defp int_to_string(ms, _) when ms >= @hour do
+    hours = div(ms, @hour)
+    ms = rem(ms, @hour)
+
+    [Integer.to_string(hours), "h" | int_to_string(ms, :skip)]
+  end
+
+  defp int_to_string(ms, _) when ms >= @minute do
+    minutes = div(ms, @minute)
+    ms = rem(ms, @minute)
+
+    [Integer.to_string(minutes), "m" | int_to_string(ms, :skip)]
+  end
+
+  defp int_to_string(ms, _) when ms >= @second do
+    seconds = div(ms, @second)
+
+    # discard remaining ms
+
+    [Integer.to_string(seconds), "s"]
   end
 
   @doc """
