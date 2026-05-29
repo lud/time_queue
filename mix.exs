@@ -6,7 +6,7 @@ defmodule TimeQueue.MixProject do
   def project do
     [
       app: :time_queue,
-      version: "1.2.2",
+      version: "1.2.3",
       elixir: "~> 1.10",
       start_permanent: false,
       elixirc_paths: elixirc_paths(Mix.env()),
