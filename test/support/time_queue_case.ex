@@ -4,13 +4,17 @@ defmodule TimeQueueCase do
   """
 
   defmacro __using__(opts) do
-    impl_module = Keyword.fetch!(opts, :module)
+    impl_module =
+      opts
+      |> Keyword.fetch!(:module)
+      |> Macro.expand_literals(__CALLER__)
 
     quote do
       use ExUnit.Case, async: false
 
       doctest unquote(impl_module)
       @mod unquote(impl_module)
+
       @runner unquote(__MODULE__)
 
       test "Basic API test" do
@@ -53,9 +57,17 @@ defmodule TimeQueueCase do
         @runner.timers_are_deletable_by_value(@mod)
       end
 
-      test "json encode a queue" do
-        if @mod.supports_encoding(:json), do: @runner.json_encode_a_queue(@mod)
-      end
+      unquote(
+        if impl_module.supports_encoding(:json) do
+          quote do
+            test "json encode a queue" do
+              @runner.json_encode_a_queue(@mod)
+            end
+          end
+        else
+          []
+        end
+      )
 
       test "peek/pop entries or values" do
         @runner.peek_or_pop_entries_or_values(@mod)
