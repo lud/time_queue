@@ -319,7 +319,7 @@ defmodule TimeQueueCase do
 
   defp pad_mod(module) when is_atom(module) do
     module
-    |> inspect
+    |> inspect()
     |> String.split(".")
     |> :lists.last()
     |> pad_col()

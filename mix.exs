@@ -10,6 +10,10 @@ defmodule TimeQueue.MixProject do
       elixir: "~> 1.10",
       start_permanent: false,
       elixirc_paths: elixirc_paths(Mix.env()),
+      source_url: @source_url,
+      description:
+        "TimeQueue is a simple functional timer queue (no processes, no messaging, " <>
+          "no erlang timers), serializable, based on a single list of maps.",
       deps: deps(),
       docs: docs(),
       versioning: versioning(),
@@ -26,10 +30,6 @@ defmodule TimeQueue.MixProject do
 
   defp package() do
     [
-      description: """
-      TimeQueue is a simple functional timer queue (no processes, no messaging,
-      no erlang timers), serializable, based on a single list of maps.
-      """,
       licenses: ["MIT"],
       links: %{
         "Github" => @source_url,
@@ -41,10 +41,8 @@ defmodule TimeQueue.MixProject do
   defp deps do
     [
       # Dev tools
-      {:ex_doc, ">= 0.28.0", only: [:dev], runtime: false},
-      {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
-      {:inch_ex, "~> 2.0", only: [:dev], runtime: false},
-      {:dialyxir, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:libdev, ">= 0.0.0", only: [:dev, :test], runtime: false},
+      {:readmix, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:jason, "> 0.0.0", only: [:dev, :test], runtime: false}
     ]
   end

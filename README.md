@@ -1,5 +1,15 @@
 # TimeQueue
 
+<!-- rdmx :badges
+    hexpm         : "time_queue?color=4e2a8e"
+    github_action : "lud/time_queue/elixir.yaml?label=CI&branch=main"
+    license       : time_queue
+    -->
+[![hex.pm Version](https://img.shields.io/hexpm/v/time_queue?color=4e2a8e)](https://hex.pm/packages/time_queue)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lud/time_queue/elixir.yaml?label=CI&branch=main)](https://github.com/lud/time_queue/actions/workflows/elixir.yaml?query=branch%3Amain)
+[![License](https://img.shields.io/hexpm/l/time_queue.svg)](https://hex.pm/packages/time_queue)
+<!-- rdmx /:badges -->
+
 This library implements a pure functional queue of timers that is persistable as
 a simple erlang term. No processes or Erlang timers are used.
 
@@ -15,16 +25,19 @@ Please see the changelog on [Github (master branch)](https://github.com/lud/time
 
 ## Installation
 
+<!-- rdmx :app_dep vsn:$app_vsn -->
 ```elixir
-def deps do
+defp deps do
   [
-    {:time_queue, "~> 1.1"},
+    {:time_queue, "~> 1.2"},
   ]
 end
 ```
+<!-- rdmx /:app_dep -->
 
 ## Basic Usage
 
+<!-- rdmx :section name:"basic usage" format:true -->
 ```elixir
 tq = TimeQueue.new()
 {:ok, tref, tq} = TimeQueue.enqueue(tq, {500, :ms}, :myval)
@@ -43,3 +56,4 @@ Process.sleep(delay)
 
 :empty = TimeQueue.pop(tq)
 ```
+<!-- rdmx /:section -->
