@@ -275,10 +275,10 @@ defmodule TimeQueueCase do
 
   def convert_to_stream(mod) do
     tq = mod.new()
-    _ = assert {:ok, _, tq} = mod.enqueue(tq, {4, :ms}, 4)
-    _ = assert {:ok, _, tq} = mod.enqueue(tq, {1, :ms}, 1)
-    _ = assert {:ok, _, tq} = mod.enqueue(tq, {3, :ms}, 3)
-    _ = assert {:ok, _, tq} = mod.enqueue(tq, {2, :ms}, 2)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {4, :ms}, 4, 0)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {1, :ms}, 1, 0)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {3, :ms}, 3, 0)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {2, :ms}, 2, 0)
 
     _ =
       assert [10, 20, 30, 40] =
