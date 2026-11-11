@@ -33,7 +33,7 @@ defmodule TimeQueue.MixProject do
       licenses: ["MIT"],
       links: %{
         "Github" => @source_url,
-        "Changelog" => "#{@source_url}/blob/master/CHANGELOG.md"
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       }
     ]
   end

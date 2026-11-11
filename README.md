@@ -21,7 +21,7 @@ persistent GenServers, …), for example in a board game.
 
 ## Changelog
 
-Please see the changelog on [Github (master branch)](https://github.com/lud/time_queue/blob/master/CHANGELOG.md).
+Please see the changelog on [Github (main branch)](https://github.com/lud/time_queue/blob/main/CHANGELOG.md).
 
 ## Installation
 
@@ -42,17 +42,17 @@ end
 tq = TimeQueue.new()
 {:ok, tref, tq} = TimeQueue.enqueue(tq, {500, :ms}, :myval)
 {:delay, ^tref, _delay} = TimeQueue.peek(tq)
-{:delay, ^tref, _delay} = TimeQueue.pop(tq)
+{:delay, ^tref, delay} = TimeQueue.pop(tq)
 
 Process.sleep(delay)
 
 # PEEK
-{:ok, entry} = TimeQueue.peek(tq)
-:myval = TimeQueue.value(entry)
+{:ok, :myval} = TimeQueue.peek(tq)
+{:ok, event} = TimeQueue.peek_event(tq)
+:myval = TimeQueue.value(event)
 
 # POP
-{:ok, entry, tq} = TimeQueue.pop(tq)
-:myval = TimeQueue.value(entry)
+{:ok, :myval, tq} = TimeQueue.pop(tq)
 
 :empty = TimeQueue.pop(tq)
 ```
