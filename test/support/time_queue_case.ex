@@ -173,6 +173,15 @@ defmodule TimeQueueCase do
 
     tq_ones = mod.filter_val(tq, match_ones)
     _ = assert 1 = mod.size(tq_ones)
+
+    tq_ones = mod.filter(tq, fn event -> match_ones.(mod.value(event)) end)
+    _ = assert 1 = mod.size(tq_ones)
+    _ = assert {:ok, {:x, 1}, _} = mod.pop(tq_ones)
+
+    {:ok, tref, tq} = mod.enqueue(tq, 0, {:x, 3})
+    tq_tref = mod.filter(tq, fn event -> mod.tref(event) == tref end)
+    _ = assert 1 = mod.size(tq_tref)
+    _ = assert {:ok, {:x, 3}, _} = mod.pop(tq_tref)
   end
 
   def json_encode_a_queue(mod) do
