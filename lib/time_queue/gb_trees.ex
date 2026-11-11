@@ -52,9 +52,9 @@ defmodule TimeQueue.GbTrees do
           | :weeks
 
   @opaque t :: {id, :gb_trees.tree(tref, any)}
-  @type timespec :: {pos_integer, timespec_unit}
+  @type timespec :: {integer, timespec_unit}
   @type ttl :: timespec | integer
-  @type timestamp_ms :: pos_integer
+  @type timestamp_ms :: integer
   @opaque tref :: {timestamp_ms, integer}
   @opaque id :: integer
   @opaque event :: record(:tqrec, tref: tref, val: any)
@@ -331,7 +331,27 @@ defmodule TimeQueue.GbTrees do
   Adds a new event to the queue with a TTL relative to the given timestamp in
   milliseconds.
 
+  The TTL is either an integer number of milliseconds, or a `{count, unit}`
+  tuple where `unit` is one of `:ms`, `:second`, `:minute`, `:hour`, `:day` or
+  `:week` (plural forms such as `:seconds` are accepted too).
+
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
+
+  The TTL can be zero or negative. The event is then scheduled at or before
+  `now` and is due immediately: `pop/2` returns it and `timeout/3` returns `0`.
+  Events keep their real scheduled timestamp, so overdue events are returned in
+  timestamp order, the oldest first. This lets you compute a TTL from a deadline
+  that may already have passed and still handle the event right away.
+
+      iex> tq = TimeQueue.GbTrees.new()
+      iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue(tq, {-1, :second}, :due_1s_ago, _now = 10_000)
+      iex> {:ok, _, tq} = TimeQueue.GbTrees.enqueue(tq, -5000, :due_5s_ago, _now = 10_000)
+      iex> TimeQueue.GbTrees.timeout(tq, _now = 10_000)
+      0
+      iex> {:ok, first, tq} = TimeQueue.GbTrees.pop(tq, _now = 10_000)
+      iex> {:ok, second, _} = TimeQueue.GbTrees.pop(tq, _now = 10_000)
+      iex> {first, second}
+      {:due_5s_ago, :due_1s_ago}
   """
   @spec enqueue(t, ttl, any, now :: integer) :: {:ok, tref, t}
   def enqueue(tq, ttl, val, now)
@@ -346,6 +366,9 @@ defmodule TimeQueue.GbTrees do
   Adds a new event to the queue with an absolute timestamp.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
+
+  The timestamp can be in the past. The event is then due immediately, and
+  overdue events are returned in timestamp order. See `enqueue/4`.
   """
   @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
   def enqueue_abs(tq, ts, val)
@@ -383,7 +406,7 @@ defmodule TimeQueue.GbTrees do
       iex> TimeQueue.GbTrees.timestamp(event)
       1234
   """
-  @spec timestamp(event) :: pos_integer()
+  @spec timestamp(event) :: timestamp_ms
   def timestamp(event)
 
   def timestamp(tqrec(tref: {ts, _})),

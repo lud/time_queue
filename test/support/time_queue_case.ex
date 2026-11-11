@@ -84,6 +84,10 @@ defmodule TimeQueueCase do
       test "stream" do
         @runner.convert_to_stream(@mod)
       end
+
+      test "negative TTLs schedule events in the past" do
+        @runner.check_negative_ttls(@mod)
+      end
     end
   end
 
@@ -297,6 +301,46 @@ defmodule TimeQueueCase do
                |> Enum.to_list()
 
     _ = assert [] = Enum.to_list(mod.stream(mod.new()))
+  end
+
+  def check_negative_ttls(mod) do
+    now = 1_000_000_000
+
+    ttls = [
+      {-1, :ms},
+      {-1, :second},
+      {-1, :seconds},
+      {-1, :minute},
+      {-1, :minutes},
+      {-1, :hour},
+      {-1, :hours},
+      {-1, :day},
+      {-1, :days},
+      {-1, :week},
+      {-1, :weeks},
+      -1
+    ]
+
+    for ttl <- ttls do
+      _ = assert {:ok, _, tq} = mod.enqueue(mod.new(), ttl, :late, now)
+      _ = assert 0 == mod.timeout(tq, now)
+      _ = assert {:ok, event} = mod.peek_event(tq, now)
+      _ = assert mod.timestamp(event) < now
+      _ = assert {:ok, :late, _} = mod.pop(tq, now)
+    end
+
+    tq = mod.new()
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {10, :ms}, :future, now)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, 0, :now, now)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {-1, :second}, :due_1s_ago, now)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, {-5, :ms}, :due_5ms_ago, now)
+    _ = assert {:ok, _, tq} = mod.enqueue(tq, -60_000, :due_1m_ago, now)
+
+    _ = assert {:ok, :due_1m_ago, tq} = mod.pop(tq, now)
+    _ = assert {:ok, :due_1s_ago, tq} = mod.pop(tq, now)
+    _ = assert {:ok, :due_5ms_ago, tq} = mod.pop(tq, now)
+    _ = assert {:ok, :now, tq} = mod.pop(tq, now)
+    _ = assert {:delay, _, 10} = mod.pop(tq, now)
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do
