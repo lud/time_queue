@@ -57,17 +57,9 @@ defmodule TimeQueueCase do
         @runner.timers_are_deletable_by_value(@mod)
       end
 
-      unquote(
-        if impl_module.supports_encoding(:json) do
-          quote do
-            test "json encode a queue" do
-              @runner.json_encode_a_queue(@mod)
-            end
-          end
-        else
-          []
-        end
-      )
+      test "json encode a queue" do
+        @runner.json_encode_a_queue(@mod)
+      end
 
       test "peek/pop entries or values" do
         @runner.peek_or_pop_entries_or_values(@mod)

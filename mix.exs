@@ -13,7 +13,7 @@ defmodule TimeQueue.MixProject do
       source_url: @source_url,
       description:
         "TimeQueue is a simple functional timer queue (no processes, no messaging, " <>
-          "no erlang timers), serializable, based on a single list of maps.",
+          "no erlang timers), serializable and JSON encodable, based on gb_trees.",
       deps: deps(),
       docs: docs(),
       versioning: versioning(),
@@ -43,7 +43,7 @@ defmodule TimeQueue.MixProject do
       # Dev tools
       {:libdev, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:readmix, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:jason, "> 0.0.0", only: [:dev, :test], runtime: false}
+      {:jason, "~> 1.0", optional: true}
     ]
   end
 
