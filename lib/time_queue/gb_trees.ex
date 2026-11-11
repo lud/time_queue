@@ -277,7 +277,7 @@ defmodule TimeQueue.GbTrees do
   """
   @spec delete_val(t, any) :: t
   def delete_val(tq, unwanted) do
-    filter(tq, fn {_, v} -> v !== unwanted end)
+    filter_entries(tq, fn {_, v} -> v !== unwanted end)
   end
 
   @doc """
@@ -291,14 +291,8 @@ defmodule TimeQueue.GbTrees do
   @spec filter(t, (event -> boolean)) :: t
   def filter(tq, fun)
 
-  def filter({max_id, tree}, fun) do
-    tree =
-      tree
-      |> :gb_trees.to_list()
-      |> Enum.filter(fun)
-      |> :gb_trees.from_orddict()
-
-    {max_id, tree}
+  def filter(tq, fun) do
+    filter_entries(tq, fn {tref, val} -> fun.(tqrec(tref: tref, val: val)) end)
   end
 
   @doc """
@@ -311,7 +305,17 @@ defmodule TimeQueue.GbTrees do
   """
   @spec filter_val(t, (any -> boolean)) :: t
   def filter_val(tq, fun) do
-    filter(tq, fn {_, v} -> fun.(v) end)
+    filter_entries(tq, fn {_, v} -> fun.(v) end)
+  end
+
+  defp filter_entries({max_id, tree}, fun) do
+    tree =
+      tree
+      |> :gb_trees.to_list()
+      |> Enum.filter(fun)
+      |> :gb_trees.from_orddict()
+
+    {max_id, tree}
   end
 
   @doc """
