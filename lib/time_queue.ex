@@ -54,9 +54,9 @@ defmodule TimeQueue do
   @opaque t :: %{m: max_id :: integer, s: size :: non_neg_integer, q: list(event)}
   @type event_value :: any
   @opaque event :: %{k: tref, v: event_value}
-  @type timespec :: {pos_integer, timespec_unit}
+  @type timespec :: {integer, timespec_unit}
   @type ttl :: timespec | integer
-  @type timestamp_ms :: pos_integer
+  @type timestamp_ms :: integer
   @opaque tref :: %{t: timestamp_ms, u: integer}
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
@@ -311,7 +311,27 @@ defmodule TimeQueue do
   Adds a new event to the queue with a TTL relative to the given timestamp in
   milliseconds.
 
+  The TTL is either an integer number of milliseconds, or a `{count, unit}`
+  tuple where `unit` is one of `:ms`, `:second`, `:minute`, `:hour`, `:day` or
+  `:week` (plural forms such as `:seconds` are accepted too).
+
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
+
+  The TTL can be zero or negative. The event is then scheduled at or before
+  `now` and is due immediately: `pop/2` returns it and `timeout/3` returns `0`.
+  Events keep their real scheduled timestamp, so overdue events are returned in
+  timestamp order, the oldest first. This lets you compute a TTL from a deadline
+  that may already have passed and still handle the event right away.
+
+      iex> tq = TimeQueue.new()
+      iex> {:ok, _, tq} = TimeQueue.enqueue(tq, {-1, :second}, :due_1s_ago, _now = 10_000)
+      iex> {:ok, _, tq} = TimeQueue.enqueue(tq, -5000, :due_5s_ago, _now = 10_000)
+      iex> TimeQueue.timeout(tq, _now = 10_000)
+      0
+      iex> {:ok, first, tq} = TimeQueue.pop(tq, _now = 10_000)
+      iex> {:ok, second, _} = TimeQueue.pop(tq, _now = 10_000)
+      iex> {first, second}
+      {:due_5s_ago, :due_1s_ago}
   """
   @spec enqueue(t, ttl, any, now :: integer) :: {:ok, tref, t}
   def enqueue(tq, ttl, val, now)
@@ -326,6 +346,9 @@ defmodule TimeQueue do
   Adds a new event to the queue with an absolute timestamp.
 
   Returns `{:ok, tref, new_queue}` where `tref` is a timer reference.
+
+  The timestamp can be in the past. The event is then due immediately, and
+  overdue events are returned in timestamp order. See `enqueue/4`.
   """
   @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
   def enqueue_abs(%{m: max_id, s: size, q: q} = tq, ts, val) do
@@ -370,7 +393,7 @@ defmodule TimeQueue do
       iex> TimeQueue.timestamp(event)
       1234
   """
-  @spec timestamp(event) :: pos_integer()
+  @spec timestamp(event) :: timestamp_ms
   def timestamp(event)
 
   def timestamp(%{k: %{t: ts}}),
@@ -493,7 +516,7 @@ defmodule TimeQueue do
   def timespec_add(ttl, int),
     do: ttl_to_milliseconds(ttl) + int
 
-  defp ttl_to_milliseconds({n, :ms}) when is_integer(n) and n >= 0,
+  defp ttl_to_milliseconds({n, :ms}) when is_integer(n),
     do: n
 
   defp ttl_to_milliseconds({_, _} = ttl) when is_timespec(ttl),
@@ -513,7 +536,4 @@ defmodule TimeQueue do
 
   defp ttl_to_seconds({weeks, unit}) when unit in [:week, :weeks],
     do: weeks * 7 * 24 * 60 * 60
-
-  defp ttl_to_seconds({_, unit}),
-    do: raise(ArgumentError, "unknown TTL unit: #{unit}")
 end
