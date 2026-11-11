@@ -100,7 +100,7 @@ defmodule TimeQueue.TimeInterval do
       iex> TimeInterval.parse!("1d1h")
       %TimeQueue.TimeInterval{ms: 90000000}
   """
-  @spec parse(binary) :: t
+  @spec parse!(binary) :: t
   def parse!(bin) do
     case parse(bin) do
       {:ok, t} ->
@@ -149,7 +149,7 @@ defmodule TimeQueue.TimeInterval do
   Same as `to_ms/1` but returns the number of milliseconds directly or raises an
   `ArgumentError`.
   """
-  @spec to_ms(binary | integer | t) :: integer
+  @spec to_ms!(binary | integer | t) :: integer
   def to_ms!(bin) when is_binary(bin),
     do: bin |> parse!() |> Map.fetch!(:ms)
 
