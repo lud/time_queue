@@ -259,6 +259,21 @@ defmodule TimeQueueCase do
     _ = assert mod.timeout(tq, :infinity, 200) == 0
     _ = assert mod.timeout(tq, :infinity) == 0
     _ = assert mod.timeout(tq) == 0
+
+    # the delay is capped to the largest timeout accepted by receive
+    max_timeout = 4_294_967_295
+    {:ok, _, tq} = mod.enqueue(mod.new(), max_timeout, :some_val, 0)
+    _ = assert mod.timeout(tq, 0) == max_timeout
+    _ = assert mod.timeout(tq, 1) == max_timeout - 1
+
+    {:ok, _, tq} = mod.enqueue(mod.new(), max_timeout + 1, :some_val, 0)
+    _ = assert mod.timeout(tq, 0) == max_timeout
+    _ = assert mod.timeout(tq, :hibernate, 0) == max_timeout
+    _ = assert {:delay, _, delay} = mod.pop(tq, 0)
+    _ = assert delay == max_timeout + 1
+
+    {:ok, _, tq} = mod.enqueue(mod.new(), {60, :days}, :some_val, 0)
+    _ = assert mod.timeout(tq, 0) == max_timeout
   end
 
   def check_fifo(mod) do

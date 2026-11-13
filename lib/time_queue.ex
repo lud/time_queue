@@ -78,6 +78,8 @@ defmodule TimeQueue do
 
   @empty_tree :gb_trees.empty()
 
+  @max_timeout 4_294_967_295
+
   defguardp is_timespec(timespec)
             when is_integer(elem(timespec, 0)) and elem(timespec, 1) in @timespec_units
 
@@ -460,7 +462,21 @@ defmodule TimeQueue do
   * `if_empty` when the queue is empty. A common value in that case is either
     `:infinity` or `:hibernate`.
   * `0` when there the next event time has been reached.
-  * The delay to the next event otherwise.
+  * The delay to the next event otherwise, capped at `4_294_967_295`
+    milliseconds (about 49.7 days), the largest timeout accepted by `receive`
+    and `GenServer`.
+
+  When the next event is further away than that limit, the process wakes up
+  before the event is due. `pop/1` then returns `{:delay, tref, ms}` with the
+  full remaining delay, and calling `timeout/3` again gives the next wait.
+  Always handle the `{:delay, tref, ms}` return of `pop/1` after a timeout.
+
+      iex> {:ok, _, tq} = TimeQueue.enqueue(TimeQueue.new(), {60, :days}, :later, _now = 0)
+      iex> TimeQueue.timeout(tq, _now = 0)
+      4_294_967_295
+      iex> {:delay, _, ms} = TimeQueue.pop(tq, _now = 0)
+      iex> ms
+      5_184_000_000
 
   For instance, when used in a `GenServer`, this function can tell when to
   automatically wakeup the process.
@@ -484,7 +500,7 @@ defmodule TimeQueue do
 
   def timeout(tq, if_empty, now) when is_atom(if_empty) and is_integer(now) do
     case peek(tq, now) do
-      {:delay, _, timeout} -> timeout
+      {:delay, _, timeout} -> min(timeout, @max_timeout)
       :empty -> if_empty
       {:ok, _value} -> 0
     end
