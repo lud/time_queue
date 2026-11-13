@@ -73,4 +73,22 @@ defmodule TimeQueue.TimeIntervalTest do
 
     assert "2 days 1 second" == (("2d1s" |> to_ms!()) + 500) |> to_string(:verbose)
   end
+
+  test "negative intervals to string" do
+    assert "-1d1h1m1s" == "-1d1h1m1s" |> to_ms!() |> to_string()
+    assert "-1d1h" == "-1d1h" |> parse!() |> to_string()
+    assert "-1s" == to_string(-1000)
+    assert "-1d20s" == to_string(-(500 + to_ms!("1d20s")))
+    assert "-500ms" == to_string(-500)
+    assert "-1ms" == to_string(-1)
+
+    assert "-1 day 20 seconds" == "-1d20s" |> to_ms!() |> to_string(:verbose)
+    assert "-2 days 1 second" == "-2d1s" |> parse!() |> to_string(:verbose)
+    assert "-500 milliseconds" == to_string(-500, :verbose)
+    assert "-1 millisecond" == to_string(-1, :verbose)
+
+    for interval <- ["-1d1h1m1s", "-3d", "-59s", "-2h30m"] do
+      assert interval == interval |> parse!() |> to_string()
+    end
+  end
 end

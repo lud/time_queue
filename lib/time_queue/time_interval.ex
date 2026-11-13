@@ -208,12 +208,19 @@ defmodule TimeQueue.TimeInterval do
 
       iex> TimeInterval.to_string(123) # Smaller than 1 second
       "123ms"
+
+      iex> "-1d1h" |> TimeInterval.parse!() |> TimeInterval.to_string()
+      "-1d1h"
   """
   @spec to_string(t | integer) :: binary
   def to_string(time_interval)
 
   def to_string(%__MODULE__{ms: ms}) do
     __MODULE__.to_string(ms)
+  end
+
+  def to_string(ms) when is_integer(ms) and ms < 0 do
+    "-" <> __MODULE__.to_string(-ms)
   end
 
   def to_string(ms) when ms < 1000 do
@@ -265,10 +272,17 @@ defmodule TimeQueue.TimeInterval do
 
       iex> "1d1h" |> TimeInterval.parse!() |> TimeInterval.to_string(:verbose)
       "1 day 1 hour"
+
+      iex> TimeInterval.to_string(-90000000, :verbose)
+      "-1 day 1 hour"
   """
   @spec to_string(t | integer, :verbose) :: binary
   def to_string(%__MODULE__{ms: ms}, :verbose) do
     __MODULE__.to_string(ms, :verbose)
+  end
+
+  def to_string(ms, :verbose) when is_integer(ms) and ms < 0 do
+    "-" <> __MODULE__.to_string(-ms, :verbose)
   end
 
   def to_string(1, :verbose) do
