@@ -1,14 +1,13 @@
 defmodule TimeQueue do
   @moduledoc """
-  Implements a timers queue based on a list of maps. The queue can be encoded
-  as JSON.
+  Implements a timers queue based on
+  [gb_trees](https://www.erlang.org/doc/apps/stdlib/gb_trees.html). The queue
+  can be encoded as JSON with `Jason` or Elixir's `JSON` module, and `dump/1`
+  returns the same data as plain maps and lists for any other encoder.
 
-  The performance will be worse for large queues in regard to the previous
-  gb_trees based implementation, although the difference is negligible for
-  small queues (<= 1000 entries).
-
-  All map keys are shrinked to a single letter as this queue is intended to
-  be encoded and published to HTTP clients over the wire, mutiple times.
+  All map keys in the encoded form are shrinked to a single letter as this
+  queue is intended to be encoded and published to HTTP clients over the wire,
+  multiple times.
 
   The queue keys are a map composed of the timestamp (`t`) of an event
   and an unique integer (`u`).
@@ -51,13 +50,18 @@ defmodule TimeQueue do
           | :week
           | :weeks
 
-  @opaque t :: %{m: max_id :: integer, s: size :: non_neg_integer, q: list(event)}
+  @opaque t :: %__MODULE__{max_id: integer, tree: :gb_trees.tree(tref, event_value)}
   @type event_value :: any
   @opaque event :: %{k: tref, v: event_value}
   @type timespec :: {integer, timespec_unit}
   @type ttl :: timespec | integer
   @type timestamp_ms :: integer
   @opaque tref :: %{t: timestamp_ms, u: integer}
+  @type dumped :: %{
+          m: integer,
+          s: non_neg_integer,
+          q: [%{k: %{t: timestamp_ms, u: integer}, v: event_value}]
+        }
 
   # If we reach the @max_int for the keys, we will start over at @min_int.
   # Hopefully in the meantime they will be no tref stored that would match any
@@ -68,6 +72,11 @@ defmodule TimeQueue do
   # We use 32b integers to keep low data size when using external term format.
   @min_int -2_147_483_648
   @max_int 2_147_483_647
+
+  @enforce_keys [:max_id, :tree]
+  defstruct @enforce_keys
+
+  @empty_tree :gb_trees.empty()
 
   defguardp is_timespec(timespec)
             when is_integer(elem(timespec, 0)) and elem(timespec, 1) in @timespec_units
@@ -81,7 +90,7 @@ defmodule TimeQueue do
   """
   @spec new :: t
   def new,
-    do: %{m: @min_int, s: 0, q: []}
+    do: %__MODULE__{max_id: @min_int, tree: :gb_trees.empty()}
 
   @doc """
   Returns the number of entries in the queue.
@@ -89,8 +98,8 @@ defmodule TimeQueue do
   @spec size(t) :: integer
   def size(tq)
 
-  def size(%{s: s}),
-    do: s
+  def size(%__MODULE__{tree: tree}),
+    do: :gb_trees.size(tree)
 
   @doc """
   Returns the next value of the queue or a delay in milliseconds before the next
@@ -152,13 +161,13 @@ defmodule TimeQueue do
           :empty | {:delay, tref, non_neg_integer} | {:ok, event}
   def peek_event(tq, now)
 
-  def peek_event(%{s: 0}, _),
+  def peek_event(%__MODULE__{tree: @empty_tree}, _),
     do: :empty
 
-  def peek_event(%{q: [h | _]}, now) do
-    case h do
-      %{k: %{t: ts}} = event when ts <= now -> {:ok, event}
-      %{k: %{t: ts} = tref} -> {:delay, tref, ts - now}
+  def peek_event(%__MODULE__{tree: tree}, now) do
+    case :gb_trees.smallest(tree) do
+      {%{t: ts} = tref, val} when ts <= now -> {:ok, event(tref, val)}
+      {%{t: ts} = tref, _} -> {:delay, tref, ts - now}
     end
   end
 
@@ -235,16 +244,15 @@ defmodule TimeQueue do
   """
   @spec pop_event(t, now :: timestamp_ms) ::
           :empty | {:delay, tref, non_neg_integer} | {:ok, event, t}
-  def pop_event(%{s: 0}, _),
+  def pop_event(%__MODULE__{tree: @empty_tree}, _),
     do: :empty
 
-  def pop_event(%{s: size, q: [h | tail]} = tq, now) do
-    case h do
-      %{k: %{t: ts}} = event when ts <= now ->
-        tq = %{tq | s: size - 1, q: tail}
-        {:ok, event, tq}
+  def pop_event(%__MODULE__{tree: tree} = tq, now) do
+    case :gb_trees.take_smallest(tree) do
+      {%{t: ts} = tref, val, tree} when ts <= now ->
+        {:ok, event(tref, val), %{tq | tree: tree}}
 
-      %{k: %{t: ts} = tref} ->
+      {%{t: ts} = tref, _, _} ->
         {:delay, tref, ts - now}
     end
   end
@@ -264,15 +272,15 @@ defmodule TimeQueue do
   def delete(tq, %{k: tref}),
     do: delete(tq, tref)
 
-  def delete(tq, %{t: _, u: _} = tref),
-    do: filter(tq, fn %{k: k} -> k != tref end)
+  def delete(%__MODULE__{tree: tree} = tq, %{t: _, u: _} = tref),
+    do: %{tq | tree: :gb_trees.delete_any(tref, tree)}
 
   @doc """
   Deletes all entries from the queue whose values are equal to `unwanted`.
   """
   @spec delete_val(t, any) :: t
   def delete_val(tq, unwanted) do
-    filter(tq, fn %{v: v} -> v !== unwanted end)
+    filter_entries(tq, fn {_, v} -> v !== unwanted end)
   end
 
   @doc """
@@ -282,9 +290,8 @@ defmodule TimeQueue do
   Use `filter_val/2` to filter only using values.
   """
   @spec filter(t, (event -> boolean)) :: t
-  def filter(%{q: q} = tq, fun) do
-    new_q = Enum.filter(q, fun)
-    %{tq | s: length(new_q), q: new_q}
+  def filter(tq, fun) do
+    filter_entries(tq, fn {tref, val} -> fun.(event(tref, val)) end)
   end
 
   @doc """
@@ -295,7 +302,17 @@ defmodule TimeQueue do
   """
   @spec filter_val(t, (any -> boolean)) :: t
   def filter_val(tq, fun) do
-    filter(tq, fn %{v: v} -> fun.(v) end)
+    filter_entries(tq, fn {_, v} -> fun.(v) end)
+  end
+
+  defp filter_entries(%__MODULE__{tree: tree} = tq, fun) do
+    tree =
+      tree
+      |> :gb_trees.to_list()
+      |> Enum.filter(fun)
+      |> :gb_trees.from_orddict()
+
+    %{tq | tree: tree}
   end
 
   @doc """
@@ -351,20 +368,10 @@ defmodule TimeQueue do
   overdue events are returned in timestamp order. See `enqueue/4`.
   """
   @spec enqueue_abs(t, end_time :: integer, value :: any) :: {:ok, tref, t}
-  def enqueue_abs(%{m: max_id, s: size, q: q} = tq, ts, val) do
+  def enqueue_abs(%__MODULE__{max_id: max_id, tree: tree} = tq, ts, val) do
     new_max_id = bump_max_id(max_id)
     tref = %{t: ts, u: new_max_id}
-    event = %{k: tref, v: val}
-    q = insert(q, event)
-    {:ok, tref, %{tq | s: size + 1, q: q, m: new_max_id}}
-  end
-
-  defp insert([%{k: ktop} = top | rest], %{k: k} = cur) when k > ktop do
-    [top | insert(rest, cur)]
-  end
-
-  defp insert(list, cur) do
-    [cur | list]
+    {:ok, tref, %{tq | max_id: new_max_id, tree: :gb_trees.insert(tref, val, tree)}}
   end
 
   defp bump_max_id(max_id) when max_id < @max_int, do: max_id + 1
@@ -414,11 +421,6 @@ defmodule TimeQueue do
 
   def tref(%{k: tref}),
     do: tref
-
-  @doc false
-  def supports_encoding(:json), do: true
-  def supports_encoding(:etf), do: true
-  def supports_encoding(_), do: false
 
   @doc """
   Returns the time to next event.
@@ -494,11 +496,94 @@ defmodule TimeQueue do
   Note that this stream is immediate and does not wait for events.
   """
   @spec stream(t) :: Enumerable.t()
-  def stream(tq) do
-    # Stream is used for compatibility with gb_trees, but here we are just
-    # returning the list of events.
-    tq.q
+  def stream(%__MODULE__{tree: tree}) do
+    Stream.unfold(:gb_trees.iterator(tree), fn iter ->
+      case :gb_trees.next(iter) do
+        {tref, val, iter} -> {event(tref, val), iter}
+        :none -> nil
+      end
+    end)
   end
+
+  @doc """
+  Returns the queue as plain maps, lists and integers.
+
+  The `Jason.Encoder` and `JSON.Encoder` implementations encode this
+  representation. Use `dump/1` to encode the queue with another encoder, or to
+  store it in a format that is independent from the internal data structure.
+  `load/1` rebuilds the queue from it.
+
+      iex> tq = TimeQueue.new()
+      iex> {:ok, _, tq} = TimeQueue.enqueue_abs(tq, 2000, :world)
+      iex> {:ok, _, tq} = TimeQueue.enqueue_abs(tq, 1000, :hello)
+      iex> %{s: 2, q: [first, second]} = TimeQueue.dump(tq)
+      iex> first
+      %{k: %{t: 1000, u: -2147483646}, v: :hello}
+      iex> second
+      %{k: %{t: 2000, u: -2147483647}, v: :world}
+
+  The returned map has the following keys, shortened to a single letter to keep
+  the encoded form small:
+
+  * `:m` - The last unique integer given to a time reference. Time references
+    created after a `load/1` continue from it.
+  * `:s` - The number of events in the queue.
+  * `:q` - The events, in the order they are due. Each event is a map with the
+    time reference under `:k` and the value under `:v`. The time reference is a
+    map with the scheduled timestamp in milliseconds under `:t` and the unique
+    integer under `:u`.
+
+  Values are returned as they were enqueued, so encoding the result as JSON
+  requires values that the encoder supports.
+  """
+  @spec dump(t) :: dumped
+  def dump(%__MODULE__{max_id: max_id, tree: tree}) do
+    events = Enum.map(:gb_trees.to_list(tree), fn {tref, val} -> event(tref, val) end)
+    %{m: max_id, s: :gb_trees.size(tree), q: events}
+  end
+
+  @doc """
+  Rebuilds a queue from the data returned by `dump/1`.
+
+  The keys can be atoms, as returned by `dump/1`, or strings, as returned by a
+  JSON decoder. Queues persisted as plain maps by TimeQueue 1.x share this
+  format and are loaded with this function too.
+
+  Event values are loaded as they are given. A value that went through JSON
+  comes back as the decoder returns it.
+
+      iex> tq = TimeQueue.new()
+      iex> {:ok, _, tq} = TimeQueue.enqueue_abs(tq, 1000, :hello)
+      iex> tq = tq |> TimeQueue.dump() |> TimeQueue.load()
+      iex> TimeQueue.peek(tq, _now = 1000)
+      {:ok, :hello}
+  """
+  @spec load(dumped | %{optional(binary) => term}) :: t
+  def load(%{m: max_id, q: events}),
+    do: load(max_id, events)
+
+  def load(%{"m" => max_id, "q" => events}),
+    do: load(max_id, events)
+
+  defp load(max_id, events) when is_integer(max_id) do
+    tree =
+      events
+      |> Enum.map(&load_event/1)
+      |> :gb_trees.from_orddict()
+
+    %__MODULE__{max_id: max_id, tree: tree}
+  end
+
+  defp load_event(%{k: tref, v: val}), do: {load_tref(tref), val}
+  defp load_event(%{"k" => tref, "v" => val}), do: {load_tref(tref), val}
+
+  defp load_tref(%{t: ts, u: id} = tref) when is_integer(ts) and is_integer(id), do: tref
+
+  defp load_tref(%{"t" => ts, "u" => id}) when is_integer(ts) and is_integer(id),
+    do: %{t: ts, u: id}
+
+  defp event(tref, val),
+    do: %{k: tref, v: val}
 
   @doc """
   This function is used internally to determine the current time when using
