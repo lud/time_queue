@@ -23,3 +23,5 @@ erl_crash.dump
 time_queue-*.tar
 
 /.elixir_ls/
+
+/tmp/
