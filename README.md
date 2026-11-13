@@ -29,7 +29,7 @@ Please see the changelog on [Github (main branch)](https://github.com/lud/time_q
 ```elixir
 defp deps do
   [
-    {:time_queue, "~> 1.2"},
+    {:time_queue, "~> 2.0"},
   ]
 end
 ```
