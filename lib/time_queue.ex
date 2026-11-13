@@ -382,9 +382,8 @@ defmodule TimeQueue do
   @doc """
   Returns the value of a queue event.
       iex> tq = TimeQueue.new()
-      iex> {:ok, _, tq} = TimeQueue.enqueue(tq, 10, :my_value)
-      iex> Process.sleep(10)
-      iex> {:ok, event} = TimeQueue.peek_event(tq)
+      iex> {:ok, _, tq} = TimeQueue.enqueue(tq, 10, :my_value, _now = 0)
+      iex> {:ok, event} = TimeQueue.peek_event(tq, _now = 10)
       iex> TimeQueue.value(event)
       :my_value
   """
@@ -412,9 +411,8 @@ defmodule TimeQueue do
   Returns the time reference of a queue event. This reference is
   used as a key to identify a unique event.
       iex> tq = TimeQueue.new()
-      iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value)
-      iex> Process.sleep(10)
-      iex> {:ok, event} = TimeQueue.peek_event(tq)
+      iex> {:ok, tref, tq} = TimeQueue.enqueue(tq, 10, :my_value, _now = 0)
+      iex> {:ok, event} = TimeQueue.peek_event(tq, _now = 10)
       iex> tref == TimeQueue.tref(event)
       true
   """

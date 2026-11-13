@@ -10,7 +10,7 @@ defmodule TimeQueueCase do
       |> Macro.expand_literals(__CALLER__)
 
     quote do
-      use ExUnit.Case, async: false
+      use ExUnit.Case, async: true
 
       doctest unquote(impl_module)
       @mod unquote(impl_module)
@@ -21,6 +21,7 @@ defmodule TimeQueueCase do
         @runner.basic_api_test(@mod)
       end
 
+      @tag :benchmark
       test "Inserting/popping many records with #{@mod} implementation" do
         IO.puts("Running many iterations with #{@mod}")
         IO.write("\n")
@@ -80,6 +81,18 @@ defmodule TimeQueueCase do
       test "negative TTLs schedule events in the past" do
         @runner.check_negative_ttls(@mod)
       end
+
+      test "now/0 returns the system time" do
+        @runner.check_now(@mod)
+      end
+
+      test "enqueue/3 schedules from the system time" do
+        @runner.check_enqueue_uses_system_time(@mod)
+      end
+
+      test "peek, pop and timeout default to the system time" do
+        @runner.check_reads_use_system_time(@mod)
+      end
     end
   end
 
@@ -90,21 +103,19 @@ defmodule TimeQueueCase do
 
   def basic_api_test(mod) do
     tq = mod.new()
-    _ = assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval)
-    _ = assert {:delay, ^tref, _delay} = mod.peek(tq)
-    _ = assert {:delay, ^tref, delay} = mod.pop(tq)
-
-    Process.sleep(delay)
+    _ = assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval, 0)
+    _ = assert {:delay, ^tref, 500} = mod.peek(tq, 0)
+    _ = assert {:delay, ^tref, 1} = mod.pop(tq, 499)
 
     # PEEK
-    _ = assert {:ok, :myval} = mod.peek(tq)
-    _ = assert {:ok, event} = mod.peek_event(tq)
+    _ = assert {:ok, :myval} = mod.peek(tq, 500)
+    _ = assert {:ok, event} = mod.peek_event(tq, 500)
     _ = assert :myval = mod.value(event)
 
     # POP
-    _ = assert {:ok, :myval, tq} = mod.pop(tq)
+    _ = assert {:ok, :myval, tq} = mod.pop(tq, 500)
 
-    _ = assert :empty = mod.pop(tq)
+    _ = assert :empty = mod.pop(tq, 500)
   end
 
   def insert_pop_many(mod, iters) do
@@ -192,21 +203,21 @@ defmodule TimeQueueCase do
 
   def peek_or_pop_entries_or_values(mod) do
     tq = mod.new()
-    _ = assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval)
+    _ = assert {:ok, tref, tq} = mod.enqueue(tq, {500, :ms}, :myval, 0)
 
     # In case of a delay the behaviour was not changed in v0.8
-    _ = assert {:delay, ^tref, _delay} = mod.peek(tq)
-    _ = assert {:delay, ^tref, _delay} = mod.pop(tq)
-
-    Process.sleep(500)
+    _ = assert {:delay, ^tref, 500} = mod.peek(tq, 0)
+    _ = assert {:delay, ^tref, 500} = mod.pop(tq, 0)
+    _ = assert {:delay, ^tref, 500} = mod.peek_event(tq, 0)
+    _ = assert {:delay, ^tref, 500} = mod.pop_event(tq, 0)
 
     # But with a succesful return we only get the value
-    _ = assert {:ok, :myval} = mod.peek(tq)
-    _ = assert {:ok, :myval, _} = mod.pop(tq)
+    _ = assert {:ok, :myval} = mod.peek(tq, 500)
+    _ = assert {:ok, :myval, _} = mod.pop(tq, 500)
 
     # The old behaviour is available
-    _ = assert {:ok, event_peeked} = mod.peek_event(tq)
-    _ = assert {:ok, event_poped, _} = mod.pop_event(tq)
+    _ = assert {:ok, event_peeked} = mod.peek_event(tq, 500)
+    _ = assert {:ok, event_poped, _} = mod.pop_event(tq, 500)
     _ = assert :myval = mod.value(event_peeked)
     _ = assert :myval = mod.value(event_poped)
 
@@ -348,6 +359,56 @@ defmodule TimeQueueCase do
     _ = assert {:ok, :due_5ms_ago, tq} = mod.pop(tq, now)
     _ = assert {:ok, :now, tq} = mod.pop(tq, now)
     _ = assert {:delay, _, 10} = mod.pop(tq, now)
+  end
+
+  @hour 3_600_000
+  @clock_margin 60_000
+
+  def check_now(mod) do
+    before = System.system_time(:millisecond)
+    now = mod.now()
+    _ = assert now in before..System.system_time(:millisecond)
+  end
+
+  def check_enqueue_uses_system_time(mod) do
+    for {ttl, ms} <- [{@hour, @hour}, {{1, :hour}, @hour}, {0, 0}, {{-1, :hour}, -@hour}] do
+      before = System.system_time(:millisecond)
+      _ = assert {:ok, _, tq} = mod.enqueue(mod.new(), ttl, :val)
+      later = System.system_time(:millisecond)
+
+      _ = assert {:ok, event} = mod.peek_event(tq, later + ms)
+      _ = assert mod.timestamp(event) in (before + ms)..(later + ms)
+    end
+  end
+
+  def check_reads_use_system_time(mod) do
+    _ =
+      assert {:ok, tref, future} =
+               mod.enqueue_abs(mod.new(), System.system_time(:millisecond) + @hour, :future)
+
+    _ = assert {:delay, ^tref, delay} = mod.peek(future)
+    _ = assert delay in (@hour - @clock_margin)..@hour
+    _ = assert {:delay, ^tref, delay} = mod.peek_event(future)
+    _ = assert delay in (@hour - @clock_margin)..@hour
+    _ = assert {:delay, ^tref, delay} = mod.pop(future)
+    _ = assert delay in (@hour - @clock_margin)..@hour
+    _ = assert {:delay, ^tref, delay} = mod.pop_event(future)
+    _ = assert delay in (@hour - @clock_margin)..@hour
+    _ = assert mod.timeout(future) in (@hour - @clock_margin)..@hour
+    _ = assert mod.timeout(future, :hibernate) in (@hour - @clock_margin)..@hour
+
+    _ =
+      assert {:ok, tref, past} =
+               mod.enqueue_abs(mod.new(), System.system_time(:millisecond) - 1000, :past)
+
+    _ = assert {:ok, :past} = mod.peek(past)
+    _ = assert {:ok, event} = mod.peek_event(past)
+    _ = assert tref == mod.tref(event)
+    _ = assert {:ok, :past, _} = mod.pop(past)
+    _ = assert {:ok, event, _} = mod.pop_event(past)
+    _ = assert tref == mod.tref(event)
+    _ = assert 0 == mod.timeout(past)
+    _ = assert 0 == mod.timeout(past, :hibernate)
   end
 
   def print_columns(mod, iters, insert_usec, pop_usec) do
